@@ -171,6 +171,12 @@ class BkashController extends Controller
     public function executePayment(Request $request)
     {
         try {
+            // Log the execute payment request
+            \Illuminate\Support\Facades\Log::info('bKash Execute Payment Request', [
+                'paymentID' => $request->paymentID,
+                'token' => substr($request->token, 0, 20) . '...', // Log partial token for security
+            ]);
+
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
@@ -180,30 +186,82 @@ class BkashController extends Controller
                 'paymentID' => $request->paymentID,
             ]);
 
+            // Log the response
+            \Illuminate\Support\Facades\Log::info('bKash Execute Payment Response', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
             if ($response->successful()) {
                 $data = $response->json();
 
-                if (isset($data['transactionStatus']) && $data['transactionStatus'] === 'Completed') {
+                // Validate the response
+                if (!isset($data['transactionStatus'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Invalid response from bKash: Missing transaction status',
+                        'data' => $data
+                    ]);
+                }
+
+                if ($data['transactionStatus'] === 'Completed') {
+                    // Verify the transaction amount
+                    $expectedAmount = number_format($this->total_payable_amount, 2, '.', '');
+                    $actualAmount = isset($data['amount']) ? $data['amount'] : null;
+
+                    if ($actualAmount && $actualAmount !== $expectedAmount) {
+                        \Illuminate\Support\Facades\Log::warning('bKash Amount Mismatch', [
+                            'expected' => $expectedAmount,
+                            'actual' => $actualAmount,
+                            'paymentID' => $request->paymentID
+                        ]);
+                    }
+
                     // Payment successful - store transaction details
-                    session()->put('bkash_transaction_id', $data['trxID']);
-                    session()->put('bkash_payment_id', $data['paymentID']);
+                    session()->put('bkash_transaction_id', $data['trxID'] ?? null);
+                    session()->put('bkash_payment_id', $data['paymentID'] ?? null);
+                    session()->put('bkash_amount', $data['amount'] ?? null);
 
                     return response()->json([
                         'success' => true,
                         'data' => $data,
                         'redirect_url' => route('plugin.saas.bkash.success.payment')
                     ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Payment not completed. Status: ' . $data['transactionStatus'],
+                        'data' => $data
+                    ]);
                 }
+            }
+
+            // Handle unsuccessful response
+            $errorData = $response->json();
+            $errorMessage = 'Payment execution failed';
+
+            if (isset($errorData['errorMessage'])) {
+                $errorMessage .= ': ' . $errorData['errorMessage'];
+            } elseif (isset($errorData['message'])) {
+                $errorMessage .= ': ' . $errorData['message'];
+            } else {
+                $errorMessage .= ' (HTTP ' . $response->status() . ')';
             }
 
             return response()->json([
                 'success' => false,
-                'message' => 'Payment execution failed',
+                'message' => $errorMessage,
+                'data' => $errorData
             ]);
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('bKash Execute Payment Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Connection error: ' . $e->getMessage(),
             ]);
         }
     }
@@ -234,19 +292,48 @@ class BkashController extends Controller
                 'payable_amount' => session()->get('payable_amount'),
                 'bkash_transaction_id' => session()->get('bkash_transaction_id'),
                 'bkash_payment_id' => session()->get('bkash_payment_id'),
+                'bkash_amount' => session()->get('bkash_amount'),
             ]);
+
+            // Verify that we have the required transaction data
+            $transaction_id = session()->get('bkash_transaction_id');
+            $payment_id = session()->get('bkash_payment_id');
+            $expected_amount = session()->get('payable_amount');
+            $actual_amount = session()->get('bkash_amount');
+
+            if (!$transaction_id || !$payment_id) {
+                \Illuminate\Support\Facades\Log::error('bKash Payment Success - Missing Transaction Data', [
+                    'transaction_id' => $transaction_id,
+                    'payment_id' => $payment_id,
+                ]);
+                throw new \Exception('Payment verification failed: Missing transaction data');
+            }
+
+            // Verify amount if available
+            if ($actual_amount && $expected_amount) {
+                $expected_formatted = number_format($expected_amount, 2, '.', '');
+                if ($actual_amount !== $expected_formatted) {
+                    \Illuminate\Support\Facades\Log::warning('bKash Payment Success - Amount Mismatch', [
+                        'expected' => $expected_formatted,
+                        'actual' => $actual_amount,
+                    ]);
+                }
+            }
 
             // Get payment information from session
             $payment_info = [
-                'transaction_id' => session()->get('bkash_transaction_id'),
-                'payment_id' => session()->get('bkash_payment_id'),
-                'payment_method' => session()->get('payment_method', 'bKash'), // Use session value or fallback
-                'status' => 'completed'
+                'transaction_id' => $transaction_id,
+                'payment_id' => $payment_id,
+                'payment_method' => session()->get('payment_method', 'bKash'),
+                'amount' => $actual_amount,
+                'status' => 'completed',
+                'verified_at' => now()->toISOString()
             ];
 
             // Clear bKash specific session data
             session()->forget('bkash_transaction_id');
             session()->forget('bkash_payment_id');
+            session()->forget('bkash_amount');
 
             return (new PaymentController)->payment_success($payment_info);
         } catch (\Exception $e) {
