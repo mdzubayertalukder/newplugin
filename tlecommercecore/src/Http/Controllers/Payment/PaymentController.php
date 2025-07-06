@@ -200,7 +200,14 @@ class PaymentController extends Controller
             $payment->payment_method = session()->get('payment_method');
             $payment->paid_amount = session()->get('payable_amount');
             $payment->payment_for = session()->get('payment_type');
-            $payment->payment_info = $payment_info;
+
+            // Convert payment_info array to JSON string for database storage
+            if (is_array($payment_info)) {
+                $payment->payment_info = json_encode($payment_info);
+            } else {
+                $payment->payment_info = $payment_info;
+            }
+
             $payment->guest_customer = session()->has('guest_customer') ? session()->get('guest_customer') : null;
             $payment->customer_id = session()->has('customer') ? session()->get('customer') : null;
             $payment->save();

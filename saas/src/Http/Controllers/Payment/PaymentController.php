@@ -367,7 +367,14 @@ class PaymentController extends Controller
             $payment->package_id = session()->get('package_id');
             $payment->plan = session()->get('plan_id');
             $payment->status = 'paid';
-            $payment->payment_info = $payment_info;
+
+            // Convert payment_info array to JSON string for database storage
+            if (is_array($payment_info)) {
+                $payment->payment_info = json_encode($payment_info);
+            } else {
+                $payment->payment_info = $payment_info;
+            }
+
             $payment->save();
 
             // Log successful payment history
@@ -412,6 +419,8 @@ class PaymentController extends Controller
             \Illuminate\Support\Facades\Log::error('SaaS Payment Success Error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'payment_info_type' => is_array($payment_info) ? 'array' : gettype($payment_info),
+                'payment_info_data' => $payment_info,
                 'session_data' => [
                     'payment_type' => session()->get('payment_type'),
                     'package_id' => session()->get('package_id'),
@@ -423,7 +432,16 @@ class PaymentController extends Controller
 
             // Clear session and redirect to payment failed
             $this->clear_payment_session();
-            toastNotification('error', 'Payment processing failed: ' . $e->getMessage(), 'Error');
+
+            // Provide more specific error message
+            $errorMessage = 'Payment processing failed';
+            if (strpos($e->getMessage(), 'array to string conversion') !== false) {
+                $errorMessage .= ': Invalid payment data format';
+            } else {
+                $errorMessage .= ': ' . $e->getMessage();
+            }
+
+            toastNotification('error', $errorMessage, 'Error');
             return redirect()->route('plugin.saas.user.dashboard');
         }
     }
