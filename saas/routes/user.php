@@ -150,6 +150,7 @@ Route::group(['prefix' => getSaasPrefix(), 'middleware' => ['handle.expired.acco
     Route::post('/bkash/get-token', [BkashController::class, 'getToken'])->name('plugin.saas.bkash.get.token');
     Route::post('/bkash/create-payment', [BkashController::class, 'createPayment'])->name('plugin.saas.bkash.create.payment');
     Route::post('/bkash/execute-payment', [BkashController::class, 'executePayment'])->name('plugin.saas.bkash.execute.payment');
+    Route::post('/bkash/verify-payment', [BkashController::class, 'verifyPayment'])->name('plugin.saas.bkash.verify.payment');
     Route::get('/bkash/callback', [BkashController::class, 'callback'])->name('plugin.saas.bkash.callback');
     Route::get('/bkash/success', [BkashController::class, 'success'])->name('plugin.saas.bkash.success.payment');
     Route::get('/bkash/cancel', [BkashController::class, 'cancel'])->name('plugin.saas.bkash.cancel.payment');

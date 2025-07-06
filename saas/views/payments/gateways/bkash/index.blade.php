@@ -195,6 +195,32 @@
             });
         }
 
+        // Verify payment status (alternative to execute)
+        function verifyPayment() {
+            return new Promise((resolve, reject) => {
+                $.ajax({
+                    url: '{{ route("plugin.saas.bkash.verify.payment") }}',
+                    type: 'POST',
+                    data: {
+                        token: paymentToken,
+                        paymentID: paymentID
+                    },
+                    success: function(response) {
+                        console.log('Verify payment response:', response);
+                        if (response.success) {
+                            resolve(response);
+                        } else {
+                            reject(response.message || 'Failed to verify payment');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Verify payment failed:', xhr.responseText);
+                        reject('Failed to verify payment: ' + (xhr.responseJSON?.message || error));
+                    }
+                });
+            });
+        }
+
         // Show error message
         function showError(message) {
             $('#error-message').text(message).show();
@@ -245,35 +271,82 @@
                         {{ translate("Amount:") }} ${amount} ${currency}<br>
                         {{ translate("Payment ID:") }} ${paymentData.paymentID}
                     </small>
+                    <div style="margin-top: 15px;">
+                        <button id="check-payment-btn" class="btn btn-primary" style="background: #E2136E; border: none; color: white; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                            {{ translate("I have completed the payment") }}
+                        </button>
+                        <br>
+                        <small style="color: #999; margin-top: 5px; display: block;">
+                            {{ translate("Click this button after completing payment in your bKash app") }}
+                        </small>
+                    </div>
                 </div>
             `);
 
-            // For bKash tokenized checkout, we need to wait for user to complete payment
-            // The payment should be completed in the bKash app
-            setTimeout(async function() {
-                try {
-                    const result = await executePayment();
+            // Add click handler for manual payment check
+            $('#check-payment-btn').on('click', async function() {
+                $(this).prop('disabled', true).text('{{ translate("Checking payment...") }}');
+                await checkPaymentStatus(paymentData);
+            });
 
-                    if (result.success && result.redirect_url) {
-                        window.location.href = result.redirect_url;
-                    } else {
-                        // Handle specific bKash errors
-                        if (result.message && result.message.includes('Payment state is invalid')) {
-                            showError(`
-                                <strong>{{ translate("Payment not completed") }}</strong><br>
-                                {{ translate("Please complete the payment in your bKash app and try again.") }}<br>
-                                <small>{{ translate("Payment ID:") }} ${paymentData.paymentID}</small>
-                            `);
-                        } else if (result.message && result.message.includes('Payment ID is invalid')) {
-                            showError('{{ translate("Payment session expired. Please try the payment again.") }}');
-                        } else {
-                            showError(result.message || '{{ translate("Payment execution failed") }}');
-                        }
-                    }
-                } catch (error) {
-                    showError('{{ translate("Payment execution failed:") }} ' + error);
+            // Also try automatic checking with longer intervals
+            setTimeout(async function() {
+                await checkPaymentStatus(paymentData);
+            }, 15000); // First check after 15 seconds
+
+            setTimeout(async function() {
+                await checkPaymentStatus(paymentData);
+            }, 30000); // Second check after 30 seconds
+
+            setTimeout(async function() {
+                await checkPaymentStatus(paymentData);
+            }, 45000); // Third check after 45 seconds
+        }
+
+        // Check payment status with better error handling
+        async function checkPaymentStatus(paymentData) {
+            try {
+                console.log('Checking payment status for:', paymentData.paymentID);
+
+                // First try to verify payment status
+                let result;
+                try {
+                    result = await verifyPayment();
+                    console.log('Verify payment result:', result);
+                } catch (verifyError) {
+                    console.log('Verify payment failed, trying execute payment:', verifyError);
+                    // If verify fails, try execute payment
+                    result = await executePayment();
                 }
-            }, 5000); // Increased delay to give more time for bKash app payment
+
+                if (result.success && result.redirect_url) {
+                    window.location.href = result.redirect_url;
+                } else if (result.success && result.status === 'completed') {
+                    // Payment verified as completed
+                    window.location.href = '{{ route("plugin.saas.bkash.success.payment") }}';
+                } else {
+                    // Handle specific bKash errors with better user guidance
+                    if (result.message && result.message.includes('Payment state is invalid')) {
+                        showError(`
+                            <strong>{{ translate("Payment not completed yet") }}</strong><br>
+                            {{ translate("Please ensure you have completed the payment in your bKash app.") }}<br>
+                            {{ translate("If you have already paid, please wait a moment and click 'I have completed the payment' again.") }}<br>
+                            <small>{{ translate("Payment ID:") }} ${paymentData.paymentID}</small>
+                        `);
+                    } else if (result.message && result.message.includes('Payment ID is invalid')) {
+                        showError('{{ translate("Payment session expired. Please try the payment again.") }}');
+                    } else if (result.message && result.message.includes('Payment has already been completed')) {
+                        // Payment was successful but we need to redirect
+                        window.location.href = '{{ route("plugin.saas.bkash.success.payment") }}';
+                    } else {
+                        showError(result.message || '{{ translate("Payment execution failed") }}');
+                    }
+                }
+            } catch (error) {
+                console.error('Payment status check failed:', error);
+                // Don't show error immediately, let user try manually
+                $('#check-payment-btn').prop('disabled', false).text('{{ translate("Check Payment Again") }}');
+            }
         }
     });
 </script>

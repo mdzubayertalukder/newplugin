@@ -210,18 +210,31 @@ class BkashController extends Controller
                 // Check for bKash error codes first
                 if (isset($data['statusCode']) && $data['statusCode'] !== '0000') {
                     $errorMessage = 'bKash Error: ' . ($data['statusMessage'] ?? 'Unknown error');
+                    $shouldRetry = false;
 
                     // Handle specific error codes
                     switch ($data['statusCode']) {
                         case '2056':
                             $errorMessage = 'Payment state is invalid. Please try the payment again.';
+                            $shouldRetry = true;
                             break;
                         case '2057':
                             $errorMessage = 'Payment ID is invalid or expired.';
                             break;
                         case '2058':
                             $errorMessage = 'Payment has already been completed.';
-                            break;
+                            // Even though it's an error code, this means payment was successful
+                            // We should redirect to success page
+                            session()->put('bkash_transaction_id', $data['trxID'] ?? null);
+                            session()->put('bkash_payment_id', $data['paymentID'] ?? null);
+                            session()->put('bkash_amount', $data['amount'] ?? null);
+
+                            return response()->json([
+                                'success' => true,
+                                'message' => 'Payment completed successfully',
+                                'data' => $data,
+                                'redirect_url' => route('plugin.saas.bkash.success.payment')
+                            ]);
                         case '2059':
                             $errorMessage = 'Payment has been cancelled.';
                             break;
@@ -232,7 +245,8 @@ class BkashController extends Controller
                     return response()->json([
                         'success' => false,
                         'message' => $errorMessage,
-                        'data' => $data
+                        'data' => $data,
+                        'should_retry' => $shouldRetry
                     ]);
                 }
 
@@ -422,6 +436,21 @@ class BkashController extends Controller
 
             if ($response->successful()) {
                 $data = $response->json();
+
+                // Check if payment is already completed
+                if (isset($data['transactionStatus']) && $data['transactionStatus'] === 'Completed') {
+                    // Store transaction details
+                    session()->put('bkash_transaction_id', $data['trxID'] ?? null);
+                    session()->put('bkash_payment_id', $data['paymentID'] ?? null);
+                    session()->put('bkash_amount', $data['amount'] ?? null);
+
+                    return response()->json([
+                        'success' => true,
+                        'data' => $data,
+                        'status' => 'completed',
+                        'redirect_url' => route('plugin.saas.bkash.success.payment')
+                    ]);
+                }
 
                 return response()->json([
                     'success' => true,
