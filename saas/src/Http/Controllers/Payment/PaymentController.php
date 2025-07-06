@@ -297,6 +297,10 @@ class PaymentController extends Controller
                 ->where('id', '=', session()->get('plan_id'))
                 ->first();
 
+            if (!$plan) {
+                throw new \Exception('Plan not found with ID: ' . session()->get('plan_id'));
+            }
+
             $currentDate = Carbon::now();
 
             $package_details = [
@@ -319,6 +323,14 @@ class PaymentController extends Controller
 
             $package = Package::find((int)session()->get('package_id'));
 
+            if (!$package) {
+                throw new \Exception('Package not found with ID: ' . session()->get('package_id'));
+            }
+
+            if (!$saas_account) {
+                throw new \Exception('Failed to create SaaS account');
+            }
+
             // Concatenate the saas_account_id, plan_id, and current_date
             $current_date = date('Ymd');
             $concatenated_string = 'SU' . $saas_account->id . 'PA' . session()->get('package_id') . 'PL' . session()->get('plan_id') . 'D' . $current_date;
@@ -340,7 +352,14 @@ class PaymentController extends Controller
             $payment->city = session()->get('city');
             $payment->address = session()->get('address');
             $payment->method = session()->get('payment_method');
-            $payment->currency = session()->get('currency')->code;
+
+            $currency = session()->get('currency');
+            if ($currency && is_object($currency)) {
+                $payment->currency = $currency->code;
+            } else {
+                $payment->currency = 'USD'; // Default currency fallback
+            }
+
             $payment->coupon_code = session()->get('coupon_code');
             $payment->primary_amount = session()->get('primary_amount') != null ? session()->get('primary_amount') : 0;
             $payment->discount_amount = session()->get('discount_amount') != null ? session()->get('discount_amount') : 0;
@@ -393,9 +412,19 @@ class PaymentController extends Controller
             \Illuminate\Support\Facades\Log::error('SaaS Payment Success Error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'session_data' => [
+                    'payment_type' => session()->get('payment_type'),
+                    'package_id' => session()->get('package_id'),
+                    'plan_id' => session()->get('plan_id'),
+                    'payable_amount' => session()->get('payable_amount'),
+                    'payment_method' => session()->get('payment_method'),
+                ]
             ]);
-            toastNotification('error', 'Payment success. External error occurred', 'Error');
-            return redirect('/');
+
+            // Clear session and redirect to payment failed
+            $this->clear_payment_session();
+            toastNotification('error', 'Payment processing failed: ' . $e->getMessage(), 'Error');
+            return redirect()->route('plugin.saas.user.dashboard');
         }
     }
 }
