@@ -63,15 +63,17 @@ class BkashController extends Controller
         }
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'username' => $this->username,
-                'password' => $this->password,
-            ])->post($this->base_url . '/tokenized/checkout/token/grant', [
-                'app_key' => $this->app_key,
-                'app_secret' => $this->app_secret,
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'username' => $this->username,
+                    'password' => $this->password,
+                ])->post($this->base_url . '/tokenized/checkout/token/grant', [
+                    'app_key' => $this->app_key,
+                    'app_secret' => $this->app_secret,
+                ]);
 
             \Illuminate\Support\Facades\Log::info('bKash Token Request (SaaS)', [
                 'url' => $this->base_url . '/tokenized/checkout/token/grant',
@@ -130,20 +132,22 @@ class BkashController extends Controller
     public function createPayment(Request $request)
     {
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'authorization' => $request->token,
-                'x-app-key' => $this->app_key,
-            ])->post($this->base_url . '/tokenized/checkout/create', [
-                'mode' => '0011',
-                'payerReference' => 'Payment-' . time(),
-                'callbackURL' => route('plugin.saas.bkash.callback'),
-                'amount' => number_format($this->total_payable_amount, 2, '.', ''),
-                'currency' => $this->currency,
-                'intent' => 'sale',
-                'merchantInvoiceNumber' => 'Invoice-' . time(),
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'authorization' => $request->token,
+                    'x-app-key' => $this->app_key,
+                ])->post($this->base_url . '/tokenized/checkout/create', [
+                    'mode' => '0011',
+                    'payerReference' => 'Payment-' . time(),
+                    'callbackURL' => route('plugin.saas.bkash.callback'),
+                    'amount' => number_format($this->total_payable_amount, 2, '.', ''),
+                    'currency' => $this->currency,
+                    'intent' => 'sale',
+                    'merchantInvoiceNumber' => 'Invoice-' . time(),
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -177,14 +181,16 @@ class BkashController extends Controller
                 'token' => substr($request->token, 0, 20) . '...', // Log partial token for security
             ]);
 
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'authorization' => $request->token,
-                'x-app-key' => $this->app_key,
-            ])->post($this->base_url . '/tokenized/checkout/execute', [
-                'paymentID' => $request->paymentID,
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'authorization' => $request->token,
+                    'x-app-key' => $this->app_key,
+                ])->post($this->base_url . '/tokenized/checkout/execute', [
+                    'paymentID' => $request->paymentID,
+                ]);
 
             // Log the response
             \Illuminate\Support\Facades\Log::info('bKash Execute Payment Response', [
@@ -397,14 +403,16 @@ class BkashController extends Controller
                 ]);
             }
 
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'authorization' => $request->token,
-                'x-app-key' => $this->app_key,
-            ])->post($this->base_url . '/tokenized/checkout/query', [
-                'paymentID' => $paymentID,
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'authorization' => $request->token,
+                    'x-app-key' => $this->app_key,
+                ])->post($this->base_url . '/tokenized/checkout/query', [
+                    'paymentID' => $paymentID,
+                ]);
 
             \Illuminate\Support\Facades\Log::info('bKash Payment Verification', [
                 'paymentID' => $paymentID,

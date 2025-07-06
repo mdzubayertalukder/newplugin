@@ -66,15 +66,17 @@ class BkashController extends Controller
         }
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'username' => $this->username,
-                'password' => $this->password,
-            ])->post($this->base_url . '/tokenized/checkout/token/grant', [
-                'app_key' => $this->app_key,
-                'app_secret' => $this->app_secret,
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'username' => $this->username,
+                    'password' => $this->password,
+                ])->post($this->base_url . '/tokenized/checkout/token/grant', [
+                    'app_key' => $this->app_key,
+                    'app_secret' => $this->app_secret,
+                ]);
 
             \Illuminate\Support\Facades\Log::info('bKash Token Request', [
                 'url' => $this->base_url . '/tokenized/checkout/token/grant',
@@ -136,20 +138,22 @@ class BkashController extends Controller
         $this->total_payable_amount = (new PaymentController())->convertCurrency($this->currency, session()->get('payable_amount'));
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'authorization' => $request->token,
-                'x-app-key' => $this->app_key,
-            ])->post($this->base_url . '/tokenized/checkout/create', [
-                'mode' => '0011',
-                'payerReference' => 'Payment-' . time(),
-                'callbackURL' => route('bkash.callback'),
-                'amount' => number_format($this->total_payable_amount, 2, '.', ''),
-                'currency' => $this->currency,
-                'intent' => 'sale',
-                'merchantInvoiceNumber' => 'Invoice-' . time(),
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'authorization' => $request->token,
+                    'x-app-key' => $this->app_key,
+                ])->post($this->base_url . '/tokenized/checkout/create', [
+                    'mode' => '0011',
+                    'payerReference' => 'Payment-' . time(),
+                    'callbackURL' => route('bkash.callback'),
+                    'amount' => number_format($this->total_payable_amount, 2, '.', ''),
+                    'currency' => $this->currency,
+                    'intent' => 'sale',
+                    'merchantInvoiceNumber' => 'Invoice-' . time(),
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
@@ -179,14 +183,16 @@ class BkashController extends Controller
         $this->setCredentials();
 
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'authorization' => $request->token,
-                'x-app-key' => $this->app_key,
-            ])->post($this->base_url . '/tokenized/checkout/execute', [
-                'paymentID' => $request->paymentID,
-            ]);
+            $response = Http::timeout(60) // Increase timeout to 60 seconds
+                ->retry(3, 2000) // Retry 3 times with 2 second delay
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'authorization' => $request->token,
+                    'x-app-key' => $this->app_key,
+                ])->post($this->base_url . '/tokenized/checkout/execute', [
+                    'paymentID' => $request->paymentID,
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
