@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Response;
 use Plugin\Saas\Models\CouponOfPackages;
 use Illuminate\Support\Facades\Validator;
 use Plugin\Saas\Repositories\CouponRepository;
@@ -36,7 +37,7 @@ class CouponController extends Controller
     /**
      * store new coupons
      */
-    public function storeCoupons(Request $request): RedirectResponse
+    public function storeCoupons(Request $request): RedirectResponse|Response
     {
         if ($request['is_for_bulk_generation']) {
             $validator = Validator::make($request->all(), [
