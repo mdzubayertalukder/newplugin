@@ -237,11 +237,19 @@
 
         // Show bKash payment interface
         function showBkashPaymentInterface(paymentData) {
-            // For now, we'll simulate the payment completion
-            // In a real implementation, this would integrate with bKash's payment interface
-            $('#loading').html('<i class="fa fa-spinner fa-spin"></i> {{ translate("Redirecting to bKash...") }}');
+            $('#loading').html(`
+                <div style="text-align: center;">
+                    <i class="fa fa-spinner fa-spin"></i> {{ translate("Payment initiated...") }}<br>
+                    <small style="color: #666; margin-top: 10px; display: block;">
+                        {{ translate("Please complete the payment in your bKash app") }}<br>
+                        {{ translate("Amount:") }} ${amount} ${currency}<br>
+                        {{ translate("Payment ID:") }} ${paymentData.paymentID}
+                    </small>
+                </div>
+            `);
 
-            // Simulate payment completion after a delay
+            // For bKash tokenized checkout, we need to wait for user to complete payment
+            // The payment should be completed in the bKash app
             setTimeout(async function() {
                 try {
                     const result = await executePayment();
@@ -249,12 +257,23 @@
                     if (result.success && result.redirect_url) {
                         window.location.href = result.redirect_url;
                     } else {
-                        showError(result.message || 'Payment execution failed');
+                        // Handle specific bKash errors
+                        if (result.message && result.message.includes('Payment state is invalid')) {
+                            showError(`
+                                <strong>{{ translate("Payment not completed") }}</strong><br>
+                                {{ translate("Please complete the payment in your bKash app and try again.") }}<br>
+                                <small>{{ translate("Payment ID:") }} ${paymentData.paymentID}</small>
+                            `);
+                        } else if (result.message && result.message.includes('Payment ID is invalid')) {
+                            showError('{{ translate("Payment session expired. Please try the payment again.") }}');
+                        } else {
+                            showError(result.message || '{{ translate("Payment execution failed") }}');
+                        }
                     }
                 } catch (error) {
-                    showError('Payment execution failed: ' + error);
+                    showError('{{ translate("Payment execution failed:") }} ' + error);
                 }
-            }, 2000);
+            }, 5000); // Increased delay to give more time for bKash app payment
         }
     });
 </script>

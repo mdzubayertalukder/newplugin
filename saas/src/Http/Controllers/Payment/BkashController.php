@@ -195,6 +195,41 @@ class BkashController extends Controller
             if ($response->successful()) {
                 $data = $response->json();
 
+                // Log the full response for debugging
+                \Illuminate\Support\Facades\Log::info('bKash Execute Payment Full Response', [
+                    'data' => $data,
+                    'paymentID' => $request->paymentID
+                ]);
+
+                // Check for bKash error codes first
+                if (isset($data['statusCode']) && $data['statusCode'] !== '0000') {
+                    $errorMessage = 'bKash Error: ' . ($data['statusMessage'] ?? 'Unknown error');
+
+                    // Handle specific error codes
+                    switch ($data['statusCode']) {
+                        case '2056':
+                            $errorMessage = 'Payment state is invalid. Please try the payment again.';
+                            break;
+                        case '2057':
+                            $errorMessage = 'Payment ID is invalid or expired.';
+                            break;
+                        case '2058':
+                            $errorMessage = 'Payment has already been completed.';
+                            break;
+                        case '2059':
+                            $errorMessage = 'Payment has been cancelled.';
+                            break;
+                        default:
+                            $errorMessage = 'bKash Error: ' . ($data['statusMessage'] ?? 'Unknown error');
+                    }
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage,
+                        'data' => $data
+                    ]);
+                }
+
                 // Validate the response
                 if (!isset($data['transactionStatus'])) {
                     return response()->json([
@@ -342,6 +377,66 @@ class BkashController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
             return (new PaymentController)->payment_failed();
+        }
+    }
+
+    /**
+     * Verify bKash payment status
+     */
+    public function verifyPayment(Request $request)
+    {
+        try {
+            $this->setCredentials();
+
+            $paymentID = $request->paymentID;
+
+            if (!$paymentID) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment ID is required'
+                ]);
+            }
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'authorization' => $request->token,
+                'x-app-key' => $this->app_key,
+            ])->post($this->base_url . '/tokenized/checkout/query', [
+                'paymentID' => $paymentID,
+            ]);
+
+            \Illuminate\Support\Facades\Log::info('bKash Payment Verification', [
+                'paymentID' => $paymentID,
+                'response_status' => $response->status(),
+                'response_body' => $response->body(),
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $data,
+                    'status' => $data['transactionStatus'] ?? 'unknown'
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to verify payment',
+                'data' => $response->json()
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('bKash Payment Verification Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Verification error: ' . $e->getMessage(),
+            ]);
         }
     }
 
