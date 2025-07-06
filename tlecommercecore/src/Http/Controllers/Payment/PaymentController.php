@@ -134,13 +134,16 @@ class PaymentController extends Controller
             if (session()->get('payment_type') == 'checkout') {
                 $order_id = session()->get('order_id');
                 $order_info = Orders::where('id', $order_id)->first();
-                if ($order_info->customer_id != null) {
-                    session()->put('customer', $order_info->customer_id);
-                }
-                if ($order_info->customer_id == null) {
-                    $guest_customer = DB::table('tl_com_guest_customer')->where('order_id', session()->get('order_id'))->select('id')->first();
-                    if ($guest_customer != null) {
-                        session()->put('guest_customer', $guest_customer->id);
+
+                if ($order_info != null) {
+                    if ($order_info->customer_id != null) {
+                        session()->put('customer', $order_info->customer_id);
+                    }
+                    if ($order_info->customer_id == null) {
+                        $guest_customer = DB::table('tl_com_guest_customer')->where('order_id', session()->get('order_id'))->select('id')->first();
+                        if ($guest_customer != null) {
+                            session()->put('guest_customer', $guest_customer->id);
+                        }
                     }
                 }
                 //Update order information
@@ -219,8 +222,10 @@ class PaymentController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            dd($e);
-            $this->payment_failed();
+
+            // Clear session and redirect to payment failed
+            $this->clear_payment_session();
+            return $this->payment_failed();
         }
     }
     /**
@@ -228,7 +233,12 @@ class PaymentController extends Controller
      */
     public function payment_failed()
     {
-        $redirect_url = session()->get('redirect_url') . '?success=failed';
+        $redirect_url = session()->get('redirect_url');
+        if ($redirect_url) {
+            $redirect_url .= '?success=failed';
+        } else {
+            $redirect_url = '/?success=failed';
+        }
         $this->clear_payment_session();
         return redirect($redirect_url);
     }
