@@ -29,4 +29,5 @@ Route::group(['as' => 'dropshipping.', 'middleware' => ['auth']], function () {
     Route::get('/dropshipping/my-products', [DropshippingTenantController::class, 'myProducts'])->name('my.products');
     Route::post('/dropshipping/import/{productId}', [ProductImportController::class, 'importSingle'])->name('import.product');
     Route::get('/dropshipping/history', [ProductImportController::class, 'history'])->name('import.history');
+    Route::get('/dropshipping/product-details/{productId}', [DropshippingTenantController::class, 'getProductDetails'])->name('product.details');
 });

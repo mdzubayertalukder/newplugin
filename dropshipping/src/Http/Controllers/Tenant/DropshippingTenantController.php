@@ -190,6 +190,67 @@ class DropshippingTenantController extends Controller
     }
 
     /**
+     * Get product details for modal view
+     */
+    public function getProductDetails($productId)
+    {
+        try {
+            $product = DB::connection('mysql')->table('dropshipping_products')
+                ->join('dropshipping_woocommerce_configs', 'dropshipping_woocommerce_configs.id', '=', 'dropshipping_products.woocommerce_config_id')
+                ->where('dropshipping_products.id', $productId)
+                ->where('dropshipping_products.status', 'publish')
+                ->select(
+                    'dropshipping_products.*',
+                    'dropshipping_woocommerce_configs.name as store_name'
+                )
+                ->first();
+
+            if (!$product) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product not found.'
+                ]);
+            }
+
+            // Process images
+            $images = [];
+            if (!empty($product->images)) {
+                $imageData = json_decode($product->images, true);
+                if (is_array($imageData)) {
+                    foreach ($imageData as $img) {
+                        if (is_array($img)) {
+                            $images[] = $img['src'] ?? $img['url'] ?? null;
+                        } else {
+                            $images[] = $img;
+                        }
+                    }
+                }
+            }
+
+            // Process categories
+            $categories = [];
+            if (!empty($product->categories)) {
+                $categoryData = json_decode($product->categories, true);
+                if (is_array($categoryData)) {
+                    $categories = array_column($categoryData, 'name');
+                }
+            }
+
+            $html = view('plugin/dropshipping::tenant.partials.product-details', compact('product', 'images', 'categories'))->render();
+
+            return response()->json([
+                'success' => true,
+                'html' => $html
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error loading product details.'
+            ]);
+        }
+    }
+
+    /**
      * Show tenant's local products (the actual imported products in their store)
      */
     public function myProducts(Request $request)
@@ -393,39 +454,7 @@ class DropshippingTenantController extends Controller
         }
     }
 
-    /**
-     * Get product details via AJAX
-     */
-    public function getProductDetails($id)
-    {
-        try {
-            $product = DB::connection('mysql')->table('dropshipping_products')
-                ->join('dropshipping_woocommerce_configs', 'dropshipping_woocommerce_configs.id', '=', 'dropshipping_products.woocommerce_config_id')
-                ->where('dropshipping_products.id', $id)
-                ->select(
-                    'dropshipping_products.*',
-                    'dropshipping_woocommerce_configs.name as store_name'
-                )
-                ->first();
 
-            if (!$product) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Product not found'
-                ]);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $product
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get product details: ' . $e->getMessage()
-            ]);
-        }
-    }
 
     /**
      * Get tenant import limits

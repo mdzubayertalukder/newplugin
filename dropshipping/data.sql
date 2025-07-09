@@ -96,8 +96,9 @@ CREATE TABLE IF NOT EXISTS `dropshipping_product_import_history` (
     KEY `dropshipping_import_history_import_status_index` (`import_status`),
     KEY `dropshipping_import_history_status_index` (`status`),
     KEY `dropshipping_import_history_import_type_index` (`import_type`),
-    KEY `dropshipping_import_history_imported_by_foreign` (`imported_by`),
-    CONSTRAINT `dropshipping_import_history_woocommerce_config_id_foreign` FOREIGN KEY (`woocommerce_config_id`) REFERENCES `dropshipping_woocommerce_configs` (`id`) ON DELETE CASCADE
+    KEY `dropshipping_import_history_imported_by_foreign` (`imported_by`)
+    -- Note: Foreign key constraint to dropshipping_woocommerce_configs removed 
+    -- because it references a table in the main database, not tenant database
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Plan Limits Table

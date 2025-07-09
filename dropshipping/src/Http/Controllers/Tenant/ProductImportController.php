@@ -71,6 +71,18 @@ class ProductImportController extends Controller
             $tenantId = tenant('id');
             $userId = Auth::id();
 
+            // Validate input
+            $validator = Validator::make($request->all(), [
+                'markup_percentage' => 'nullable|numeric|min:0|max:500'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid markup percentage provided.'
+                ], 422);
+            }
+
             // Get the product from dropshipping products (main database)
             $product = DB::connection('mysql')->table('dropshipping_products')
                 ->where('id', $productId)
@@ -95,6 +107,15 @@ class ProductImportController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'This product has already been imported to your store.'
+                ]);
+            }
+
+            // Check import limits
+            $limits = $this->getTenantImportLimits($tenantId);
+            if ($limits['monthly_used'] >= $limits['monthly_limit']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Monthly import limit reached. Please upgrade your plan or wait for next month.'
                 ]);
             }
 
@@ -172,11 +193,43 @@ class ProductImportController extends Controller
                 'updated_at' => now(),
             ]);
 
+            // Get a valid WooCommerce config ID - either from the product or find the first active one
+            $woocommerceConfigId = null;
+            if ($product->woocommerce_config_id) {
+                // Check if the config exists and is active
+                $configExists = DB::connection('mysql')
+                    ->table('dropshipping_woocommerce_configs')
+                    ->where('id', $product->woocommerce_config_id)
+                    ->where('is_active', 1)
+                    ->exists();
+
+                if ($configExists) {
+                    $woocommerceConfigId = $product->woocommerce_config_id;
+                }
+            }
+
+            // If no valid config from product, try to get the first active config
+            if (!$woocommerceConfigId) {
+                $activeConfig = DB::connection('mysql')
+                    ->table('dropshipping_woocommerce_configs')
+                    ->where('is_active', 1)
+                    ->first();
+
+                if ($activeConfig) {
+                    $woocommerceConfigId = $activeConfig->id;
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No active WooCommerce configuration found. Please configure a WooCommerce store first.'
+                    ]);
+                }
+            }
+
             // Create import history record
             $importId = DB::table('dropshipping_product_import_history')->insertGetId([
                 'tenant_id' => $tenantId,
-                'woocommerce_store_id' => $product->woocommerce_config_id ?? 1,
-                'woocommerce_config_id' => $product->woocommerce_config_id ?? 1,
+                'woocommerce_store_id' => $woocommerceConfigId,
+                'woocommerce_config_id' => $woocommerceConfigId,
                 'woocommerce_product_id' => $product->woocommerce_product_id ?? $product->id,
                 'dropshipping_product_id' => $productId,
                 'local_product_id' => $localProductId,
@@ -313,10 +366,40 @@ class ProductImportController extends Controller
                         continue;
                     }
 
+                    // Get a valid WooCommerce config ID - either from the product or find the first active one
+                    $woocommerceConfigId = null;
+                    if ($product->woocommerce_config_id) {
+                        // Check if the config exists and is active
+                        $configExists = DB::connection('mysql')
+                            ->table('dropshipping_woocommerce_configs')
+                            ->where('id', $product->woocommerce_config_id)
+                            ->where('is_active', 1)
+                            ->exists();
+
+                        if ($configExists) {
+                            $woocommerceConfigId = $product->woocommerce_config_id;
+                        }
+                    }
+
+                    // If no valid config from product, try to get the first active config
+                    if (!$woocommerceConfigId) {
+                        $activeConfig = DB::connection('mysql')
+                            ->table('dropshipping_woocommerce_configs')
+                            ->where('is_active', 1)
+                            ->first();
+
+                        if ($activeConfig) {
+                            $woocommerceConfigId = $activeConfig->id;
+                        } else {
+                            $errors[] = "No active WooCommerce configuration found for product '{$product->name}'";
+                            continue;
+                        }
+                    }
+
                     // Create import record
                     $importId = DB::table('dropshipping_product_import_history')->insertGetId([
                         'tenant_id' => $tenantId,
-                        'woocommerce_config_id' => $product->woocommerce_config_id,
+                        'woocommerce_config_id' => $woocommerceConfigId,
                         'dropshipping_product_id' => $productId,
                         'import_type' => 'bulk',
                         'status' => 'completed',

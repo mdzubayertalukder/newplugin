@@ -116,19 +116,20 @@
 
                             <!-- Import Button -->
                             <div class="mt-3">
-                                <form method="POST" action="{{ route('dropshipping.import.product', $product->id) }}" class="import-form">
-                                    @csrf
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-primary btn-sm import-btn"
-                                            {{ $product->stock_quantity <= 0 ? 'disabled' : '' }}>
-                                            <i class="fas fa-download"></i> Import Product
-                                        </button>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm"
-                                            onclick="showProductDetails({{ $product->id }})">
-                                            <i class="fas fa-eye"></i> View Details
-                                        </button>
-                                    </div>
-                                </form>
+                                <div class="d-grid gap-2">
+                                    <button type="button"
+                                        class="btn btn-primary btn-sm import-btn"
+                                        data-product-id="{{ $product->id }}"
+                                        data-product-name="{{ $product->name }}"
+                                        onclick="importProduct(this)"
+                                        {{ $product->stock_quantity <= 0 ? 'disabled' : '' }}>
+                                        <i class="fas fa-download"></i> Import Product
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        onclick="showProductDetails({{ $product->id }})">
+                                        <i class="fas fa-eye"></i> View Details
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -176,6 +177,115 @@
     </div>
 </div>
 
+<script>
+    // DIRECT SCRIPT - Define importProduct function immediately
+    console.log('Loading importProduct function...');
+
+    window.importProduct = function(button) {
+        console.log('importProduct called with button:', button);
+
+        const productId = button.getAttribute('data-product-id');
+        const productName = button.getAttribute('data-product-name');
+
+        // Show confirmation
+        if (!confirm('Are you sure you want to import "' + productName + '" to your store?')) {
+            return;
+        }
+
+        // Disable button and show loading
+        button.disabled = true;
+        button.classList.add('importing');
+        const originalContent = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+
+        // Make AJAX request
+        fetch('/dropshipping/import/' + productId, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    markup_percentage: 20
+                })
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    // Show success
+                    button.innerHTML = '<i class="fas fa-check"></i> Imported!';
+                    button.classList.remove('importing');
+                    button.classList.add('import-success');
+
+                    // Show success message
+                    if (typeof toastr !== 'undefined') {
+                        toastr.success(data.message || 'Product imported successfully!');
+                    } else {
+                        alert(data.message || 'Product imported successfully!');
+                    }
+
+                    // Disable permanently after 2 seconds
+                    setTimeout(function() {
+                        button.innerHTML = '<i class="fas fa-check"></i> Already Imported';
+                        button.disabled = true;
+                    }, 2000);
+                } else {
+                    // Show error
+                    button.innerHTML = originalContent;
+                    button.disabled = false;
+                    button.classList.remove('importing');
+
+                    if (typeof toastr !== 'undefined') {
+                        toastr.error(data.message || 'Import failed. Please try again.');
+                    } else {
+                        alert(data.message || 'Import failed. Please try again.');
+                    }
+                }
+            })
+            .catch(function(error) {
+                console.error('Import error:', error);
+                button.innerHTML = originalContent;
+                button.disabled = false;
+                button.classList.remove('importing');
+
+                if (typeof toastr !== 'undefined') {
+                    toastr.error('An error occurred. Please try again.');
+                } else {
+                    alert('An error occurred. Please try again.');
+                }
+            });
+    };
+
+    window.showProductDetails = function(productId) {
+        console.log('showProductDetails called with productId:', productId);
+
+        const modal = document.getElementById('productDetailsModal');
+        const modalContent = document.getElementById('productDetailsContent');
+
+        if (!modal || !modalContent) {
+            alert('Modal not found');
+            return;
+        }
+
+        // Show loading
+        modalContent.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Loading product details...</p></div>';
+
+        // Show modal
+        if (typeof bootstrap !== 'undefined') {
+            const bootstrapModal = new bootstrap.Modal(modal);
+            bootstrapModal.show();
+        } else if (typeof $ !== 'undefined') {
+            $(modal).modal('show');
+        } else {
+            modal.style.display = 'block';
+        }
+    };
+
+    console.log('importProduct function loaded successfully:', typeof window.importProduct);
+</script>
+
 @endsection
 
 @push('styles')
@@ -198,98 +308,14 @@
         font-size: 0.7rem;
     }
 
-    .card-title {
-        line-height: 1.3;
-        height: 2.6em;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
+    .importing {
+        pointer-events: none;
+        opacity: 0.7;
+    }
+
+    .import-success {
+        background-color: #28a745 !important;
+        border-color: #28a745 !important;
     }
 </style>
-@endpush
-
-@push('scripts')
-<script>
-    // Handle import form submission
-    $(document).on('submit', '.import-form', function(e) {
-        e.preventDefault();
-
-        let form = $(this);
-        let btn = form.find('.import-btn');
-        let originalText = btn.html();
-
-        // Show loading state
-        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importing...');
-
-        $.ajax({
-            url: form.attr('action'),
-            method: 'POST',
-            data: form.serialize(),
-            success: function(response) {
-                if (response.success) {
-                    // Show success message
-                    btn.removeClass('btn-primary').addClass('btn-success')
-                        .html('<i class="fas fa-check"></i> Imported!');
-
-                    // Show success notification
-                    if (typeof toastr !== 'undefined') {
-                        toastr.success(response.message || 'Product imported successfully!');
-                    } else {
-                        alert('Product imported successfully!');
-                    }
-
-                    // Reset button after 3 seconds
-                    setTimeout(() => {
-                        btn.removeClass('btn-success').addClass('btn-primary')
-                            .html(originalText).prop('disabled', false);
-                    }, 3000);
-                } else {
-                    // Show error
-                    btn.prop('disabled', false).html(originalText);
-                    if (typeof toastr !== 'undefined') {
-                        toastr.error(response.message || 'Import failed!');
-                    } else {
-                        alert(response.message || 'Import failed!');
-                    }
-                }
-            },
-            error: function(xhr) {
-                btn.prop('disabled', false).html(originalText);
-                let message = 'Import failed!';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    message = xhr.responseJSON.message;
-                }
-                if (typeof toastr !== 'undefined') {
-                    toastr.error(message);
-                } else {
-                    alert(message);
-                }
-            }
-        });
-    });
-
-    // Show product details modal
-    function showProductDetails(productId) {
-        $('#productDetailsModal').modal('show');
-        $('#productDetailsContent').html(`
-            <div class="text-center">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-            </div>
-        `);
-
-        // Here you can load product details via AJAX if needed
-        // For now, we'll show a placeholder
-        setTimeout(() => {
-            $('#productDetailsContent').html(`
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i>
-                    Product details feature is coming soon! For now, you can import the product directly.
-                </div>
-            `);
-        }, 1000);
-    }
-</script>
 @endpush
