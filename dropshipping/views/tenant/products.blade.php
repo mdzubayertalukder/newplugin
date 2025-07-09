@@ -166,11 +166,25 @@
 
                 {{-- Product Price --}}
                 <div class="product-price mb-2">
-                    @if($product->sale_price && $product->sale_price != $product->regular_price)
+                    @php
+                    $hasPrice = ($product->price && $product->price > 0) ||
+                    ($product->regular_price && $product->regular_price > 0) ||
+                    ($product->sale_price && $product->sale_price > 0);
+                    @endphp
+
+                    @if($hasPrice)
+                    @if($product->sale_price && $product->sale_price > 0 && $product->regular_price && $product->sale_price != $product->regular_price)
                     <span class="text-muted"><del>${{ number_format($product->regular_price, 2) }}</del></span>
                     <span class="text-success">${{ number_format($product->sale_price, 2) }}</span>
+                    @elseif($product->regular_price && $product->regular_price > 0)
+                    ${{ number_format($product->regular_price, 2) }}
+                    @elseif($product->price && $product->price > 0)
+                    ${{ number_format($product->price, 2) }}
                     @else
-                    ${{ number_format($product->price ?: $product->regular_price, 2) }}
+                    <span class="text-muted">{{ translate('Price on request') }}</span>
+                    @endif
+                    @else
+                    <span class="text-muted">{{ translate('Price on request') }}</span>
                     @endif
                 </div>
 
@@ -285,7 +299,7 @@
         $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> {{ translate("Importing...") }}');
 
         $.ajax({
-            url: `{{ route('dropshipping.import.single', ':id') }}`.replace(':id', currentProductId),
+            url: `{{ route('dropshipping.import.product', ':id') }}`.replace(':id', currentProductId),
             method: 'POST',
             data: {
                 _token: '{{ csrf_token() }}'

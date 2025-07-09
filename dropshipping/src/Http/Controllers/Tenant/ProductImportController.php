@@ -8,6 +8,7 @@ use Plugin\Dropshipping\Models\DropshippingProduct;
 use Plugin\Dropshipping\Models\ProductImportHistory;
 use Plugin\Dropshipping\Models\DropshippingPlanLimit;
 use Plugin\Dropshipping\Services\ProductImportService;
+use Plugin\Dropshipping\Services\ImageImportService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -17,10 +18,12 @@ use Illuminate\Support\Str;
 class ProductImportController extends Controller
 {
     protected $importService;
+    protected $imageService;
 
-    public function __construct(ProductImportService $importService)
+    public function __construct(ProductImportService $importService, ImageImportService $imageService)
     {
         $this->importService = $importService;
+        $this->imageService = $imageService;
     }
 
     /**
@@ -134,19 +137,16 @@ class ProductImportController extends Controller
             // Generate unique SKU
             $sku = $this->generateUniqueSku($product->sku ?? 'DS-' . $productId);
 
-            // Extract first image
+            // Import thumbnail image
             $thumbnailImageId = null;
             if (!empty($product->images)) {
-                $images = json_decode($product->images, true);
-                if (is_array($images) && count($images) > 0) {
-                    // For now, we'll store the image URL in the thumbnail_image field
-                    // In a real system, you'd upload the image and get an ID
-                    if (is_array($images[0])) {
-                        $imageUrl = $images[0]['src'] ?? $images[0]['url'] ?? null;
-                    } else {
-                        $imageUrl = $images[0];
-                    }
-                    $thumbnailImageId = $imageUrl; // Store URL directly for now
+                Log::info('Importing thumbnail image for product: ' . $product->name);
+                $thumbnailImageId = $this->imageService->importThumbnailImage($product->images, $product->name);
+
+                if ($thumbnailImageId) {
+                    Log::info('Successfully imported thumbnail image with ID: ' . $thumbnailImageId);
+                } else {
+                    Log::warning('Failed to import thumbnail image for product: ' . $product->name);
                 }
             }
 
@@ -193,6 +193,11 @@ class ProductImportController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            // Import gallery images
+            if (!empty($product->images)) {
+                $this->importProductGalleryImages($localProductId, $product->images, $product->name);
+            }
 
             // Get a valid WooCommerce config ID - either from the product or find the first active one
             $woocommerceConfigId = null;
@@ -574,36 +579,52 @@ class ProductImportController extends Controller
      */
     public function getImportStats($userId)
     {
+        // This is a placeholder method for import statistics
+        // You can implement detailed statistics if needed
+        return [
+            'total_imported' => 0,
+            'last_import' => null,
+            'success_rate' => 100
+        ];
+    }
+
+    /**
+     * Import gallery images for a product
+     */
+    private function importProductGalleryImages($localProductId, $imagesData, $productName)
+    {
         try {
-            $stats = [
-                'total_imported' => DB::table('dropshipping_imported_products')
-                    ->where('user_id', $userId)
-                    ->count(),
+            // Parse images data
+            if (is_string($imagesData)) {
+                $images = json_decode($imagesData, true);
+            } else {
+                $images = $imagesData;
+            }
 
-                'imported_today' => DB::table('dropshipping_imported_products')
-                    ->where('user_id', $userId)
-                    ->whereDate('imported_at', today())
-                    ->count(),
+            if (!is_array($images) || empty($images)) {
+                Log::info('No gallery images to import for product: ' . $productName);
+                return;
+            }
 
-                'imported_this_month' => DB::table('dropshipping_imported_products')
-                    ->where('user_id', $userId)
-                    ->whereYear('imported_at', now()->year)
-                    ->whereMonth('imported_at', now()->month)
-                    ->count(),
+            Log::info('Importing ' . count($images) . ' gallery images for product: ' . $productName);
 
-                'total_value' => DB::table('dropshipping_imported_products')
-                    ->where('user_id', $userId)
-                    ->sum('import_price') ?: 0
-            ];
+            // Import up to 10 gallery images (skip first one as it's already used as thumbnail)
+            $galleryImages = array_slice($images, 1, 9);
+            $importedGalleryImages = $this->imageService->importMultipleImages($galleryImages, $productName . '_gallery', 9);
 
-            return $stats;
+            // Store gallery image relationships
+            foreach ($importedGalleryImages as $index => $imageId) {
+                DB::table('tl_com_product_gallery_images')->insert([
+                    'product_id' => $localProductId,
+                    'image_id' => $imageId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            Log::info('Successfully imported ' . count($importedGalleryImages) . ' gallery images for product: ' . $productName);
         } catch (\Exception $e) {
-            return [
-                'total_imported' => 0,
-                'imported_today' => 0,
-                'imported_this_month' => 0,
-                'total_value' => 0
-            ];
+            Log::error('Gallery image import failed for product: ' . $productName . ' - Error: ' . $e->getMessage());
         }
     }
 }

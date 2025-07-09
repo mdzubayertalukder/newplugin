@@ -198,64 +198,109 @@
         const originalContent = button.innerHTML;
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
 
-        // Make AJAX request
-        fetch('/dropshipping/import/' + productId, {
+        // Use jQuery AJAX like the working version
+        const importUrl = '{{ route("dropshipping.import.product", ":id") }}'.replace(':id', productId);
+
+        if (typeof $ !== 'undefined') {
+            $.ajax({
+                url: importUrl,
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
+                data: {
+                    _token: '{{ csrf_token() }}',
                     markup_percentage: 20
-                })
-            })
-            .then(function(response) {
-                return response.json();
-            })
-            .then(function(data) {
-                if (data.success) {
-                    // Show success
-                    button.innerHTML = '<i class="fas fa-check"></i> Imported!';
-                    button.classList.remove('importing');
-                    button.classList.add('import-success');
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Show success
+                        button.innerHTML = '<i class="fas fa-check"></i> Imported!';
+                        button.classList.remove('importing');
+                        button.classList.add('import-success');
 
-                    // Show success message
-                    if (typeof toastr !== 'undefined') {
-                        toastr.success(data.message || 'Product imported successfully!');
+                        // Show success message
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success(response.message || 'Product imported successfully!');
+                        } else {
+                            alert(response.message || 'Product imported successfully!');
+                        }
+
+                        // Disable permanently after 2 seconds
+                        setTimeout(function() {
+                            button.innerHTML = '<i class="fas fa-check"></i> Already Imported';
+                            button.disabled = true;
+                        }, 2000);
                     } else {
-                        alert(data.message || 'Product imported successfully!');
-                    }
+                        // Show error
+                        button.innerHTML = originalContent;
+                        button.disabled = false;
+                        button.classList.remove('importing');
 
-                    // Disable permanently after 2 seconds
-                    setTimeout(function() {
-                        button.innerHTML = '<i class="fas fa-check"></i> Already Imported';
-                        button.disabled = true;
-                    }, 2000);
-                } else {
-                    // Show error
+                        if (typeof toastr !== 'undefined') {
+                            toastr.error(response.message || 'Import failed. Please try again.');
+                        } else {
+                            alert(response.message || 'Import failed. Please try again.');
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Import error:', xhr);
                     button.innerHTML = originalContent;
                     button.disabled = false;
                     button.classList.remove('importing');
 
+                    let errorMessage = 'An error occurred. Please try again.';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        errorMessage = response.message || errorMessage;
+                    } catch (e) {
+                        // Use default message
+                    }
+
                     if (typeof toastr !== 'undefined') {
-                        toastr.error(data.message || 'Import failed. Please try again.');
+                        toastr.error(errorMessage);
                     } else {
-                        alert(data.message || 'Import failed. Please try again.');
+                        alert(errorMessage);
                     }
                 }
-            })
-            .catch(function(error) {
-                console.error('Import error:', error);
-                button.innerHTML = originalContent;
-                button.disabled = false;
-                button.classList.remove('importing');
-
-                if (typeof toastr !== 'undefined') {
-                    toastr.error('An error occurred. Please try again.');
-                } else {
-                    alert('An error occurred. Please try again.');
-                }
             });
+        } else {
+            // Fallback to fetch if jQuery not available
+            fetch(importUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: new URLSearchParams({
+                        '_token': '{{ csrf_token() }}',
+                        'markup_percentage': 20
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        button.innerHTML = '<i class="fas fa-check"></i> Imported!';
+                        button.classList.remove('importing');
+                        button.classList.add('import-success');
+                        alert(data.message || 'Product imported successfully!');
+                        setTimeout(() => {
+                            button.innerHTML = '<i class="fas fa-check"></i> Already Imported';
+                            button.disabled = true;
+                        }, 2000);
+                    } else {
+                        button.innerHTML = originalContent;
+                        button.disabled = false;
+                        button.classList.remove('importing');
+                        alert(data.message || 'Import failed. Please try again.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Import error:', error);
+                    button.innerHTML = originalContent;
+                    button.disabled = false;
+                    button.classList.remove('importing');
+                    alert('An error occurred. Please try again.');
+                });
+        }
     };
 
     window.showProductDetails = function(productId) {

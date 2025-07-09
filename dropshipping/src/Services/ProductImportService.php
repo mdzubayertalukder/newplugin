@@ -2,13 +2,20 @@
 
 namespace Plugin\Dropshipping\Services;
 
-use Plugin\Dropshipping\Models\DropshippingProduct;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Plugin\Dropshipping\Models\DropshippingProduct;
 
 class ProductImportService
 {
+    protected $imageService;
+
+    public function __construct(ImageImportService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
+
     /**
      * Import a dropshipping product to tenant store
      */
@@ -177,23 +184,18 @@ class ProductImportService
      */
     protected function importProductImages(int $productId, array $images)
     {
-        foreach ($images as $index => $image) {
-            if (empty($image['src'])) {
-                continue;
-            }
+        // For TlCommerce, we handle thumbnail in the main product record
+        // and additional images in the gallery table
+        if (empty($images)) {
+            return;
+        }
 
-            // Download and save image locally (optional)
-            $localImagePath = $this->downloadAndSaveImage($image['src'], $productId);
+        // The thumbnail is already handled in the main import function
+        // Here we can import additional images as gallery images
+        $galleryImages = array_slice($images, 1); // Skip first image (thumbnail)
 
-            DB::table('tl_product_images')->insert([
-                'product_id' => $productId,
-                'image_path' => $localImagePath ?: $image['src'],
-                'alt_text' => $image['alt'] ?? '',
-                'is_primary' => $index === 0 ? 1 : 0,
-                'sort_order' => $index,
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
+        if (!empty($galleryImages)) {
+            $this->importProductGalleryImages($productId, $galleryImages);
         }
     }
 
@@ -203,21 +205,30 @@ class ProductImportService
     protected function importProductGalleryImages(int $productId, array $galleryImages)
     {
         foreach ($galleryImages as $index => $image) {
-            if (empty($image['src'])) {
+            $imageUrl = null;
+
+            if (is_array($image)) {
+                $imageUrl = $image['src'] ?? $image['url'] ?? null;
+            } else {
+                $imageUrl = $image;
+            }
+
+            if (empty($imageUrl)) {
                 continue;
             }
 
-            // Download and save image locally (optional)
-            $localImagePath = $this->downloadAndSaveImage($image['src'], $productId);
+            // Import image using the ImageImportService
+            $fileId = $this->imageService->importImageFromUrl($imageUrl, 'product_gallery_' . $productId . '_' . $index);
 
-            DB::table('tl_product_gallery')->insert([
-                'product_id' => $productId,
-                'image_path' => $localImagePath ?: $image['src'],
-                'alt_text' => $image['alt'] ?? '',
-                'sort_order' => $index,
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
+            if ($fileId) {
+                // Store in gallery table
+                DB::table('tl_com_product_gallery_images')->insert([
+                    'product_id' => $productId,
+                    'image_id' => $fileId,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            }
         }
     }
 
@@ -263,7 +274,7 @@ class ProductImportService
             'slug' => Str::slug($categoryData['name']),
             'description' => $categoryData['description'] ?? '',
             'status' => 'active',
-            'created_by' => auth()->id(),
+            'created_by' => 1, // Default admin user
             'created_at' => now(),
             'updated_at' => now()
         ]);
@@ -291,31 +302,10 @@ class ProductImportService
         return DB::table('tl_tags')->insertGetId([
             'name' => $tagData['name'],
             'slug' => Str::slug($tagData['name']),
-            'created_by' => auth()->id(),
+            'created_by' => 1, // Default admin user
             'created_at' => now(),
             'updated_at' => now()
         ]);
-    }
-
-    /**
-     * Download and save image locally (optional implementation)
-     */
-    protected function downloadAndSaveImage(string $imageUrl, int $productId): ?string
-    {
-        try {
-            // This is a basic implementation - you might want to implement proper image handling
-            // For now, we'll just return the original URL
-            // In a full implementation, you would:
-            // 1. Download the image
-            // 2. Store it in your local storage
-            // 3. Return the local path
-
-            return $imageUrl; // Return original URL for now
-
-        } catch (\Exception $e) {
-            Log::warning('Failed to download image: ' . $e->getMessage());
-            return $imageUrl; // Fallback to original URL
-        }
     }
 
     /**

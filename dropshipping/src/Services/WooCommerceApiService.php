@@ -288,6 +288,14 @@ class WooCommerceApiService
             ->where('woocommerce_product_id', $product['id'])
             ->first();
 
+        // Helper function to convert price strings to proper numbers
+        $convertPrice = function ($price) {
+            if (empty($price) || $price === '' || $price === '0' || $price === 0) {
+                return null;
+            }
+            return floatval($price);
+        };
+
         $productData = [
             'woocommerce_config_id' => $configId,
             'woocommerce_product_id' => $product['id'],
@@ -295,9 +303,9 @@ class WooCommerceApiService
             'slug' => $product['slug'],
             'description' => $product['description'] ?? '',
             'short_description' => $product['short_description'] ?? '',
-            'price' => $product['price'] ?? 0,
-            'regular_price' => $product['regular_price'] ?? 0,
-            'sale_price' => $product['sale_price'] ?? null,
+            'price' => $convertPrice($product['price']),
+            'regular_price' => $convertPrice($product['regular_price']),
+            'sale_price' => $convertPrice($product['sale_price']),
             'sku' => $product['sku'] ?? '',
             'stock_quantity' => $product['stock_quantity'] ?? 0,
             'stock_status' => $product['stock_status'] ?? 'instock',
