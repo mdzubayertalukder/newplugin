@@ -197,6 +197,7 @@ use Carbon\Carbon;
 
 // Check if user has admin access and is not on tenant
 if (!isTenant() && auth()->user() && auth()->user()->hasRole('Super Admin')) {
+try {
 // Get dropshipping order statistics
 $totalDropshippingOrders = DropshippingOrder::count();
 $pendingOrders = DropshippingOrder::where('status', 'pending')->count();
@@ -213,6 +214,16 @@ $recentDropshippingOrders = DropshippingOrder::with(['submittedBy'])
 $pendingWithdrawals = WithdrawalRequest::where('status', 'pending')->count();
 $totalEarnings = TenantBalance::sum('total_earnings');
 $totalAvailableBalance = TenantBalance::sum('available_balance');
+} catch (\Exception $e) {
+// Set default values if database queries fail
+$totalDropshippingOrders = $pendingOrders = $approvedOrders = $todayOrders = 0;
+$recentDropshippingOrders = collect([]);
+$pendingWithdrawals = 0;
+$totalEarnings = $totalAvailableBalance = 0;
+
+// Log the error for debugging
+\Log::error('Dropshipping dashboard error: ' . $e->getMessage());
+}
 } else {
 $totalDropshippingOrders = $pendingOrders = $approvedOrders = $todayOrders = 0;
 $recentDropshippingOrders = collect([]);
