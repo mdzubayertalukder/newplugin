@@ -96,6 +96,12 @@ $dropshippingActive = file_exists(base_path('plugins/dropshipping/plugin.json'))
         <li class="{{ Request::routeIs(['dropshipping.import.history', 'user.dropshipping.history']) ? 'active' : '' }}">
             <a href="{{ route('dropshipping.import.history') }}">{{ translate('Import History') }}</a>
         </li>
+        <li class="{{ Request::routeIs(['dropshipping.order.management']) ? 'active' : '' }}">
+            <a href="{{ route('dropshipping.order.management') }}">{{ translate('Order Management') }}</a>
+        </li>
+        <li class="{{ Request::routeIs(['dropshipping.withdrawals']) ? 'active' : '' }}">
+            <a href="{{ route('dropshipping.withdrawals') }}">{{ translate('Withdrawals') }}</a>
+        </li>
     </ul>
 </li>
 @endif

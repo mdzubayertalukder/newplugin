@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use Plugin\Dropshipping\Http\Controllers\Admin\WooCommerceConfigController;
+use Plugin\Dropshipping\Http\Controllers\Admin\OrderManagementController as AdminOrderController;
+use Plugin\Dropshipping\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -139,4 +141,32 @@ Route::group(['prefix' => getAdminPrefix(), 'as' => 'admin.dropshipping.', 'midd
     // Settings
     Route::get('/dropshipping/settings', [WooCommerceConfigController::class, 'settings'])->name('settings.index');
     Route::post('/dropshipping/settings/update', [WooCommerceConfigController::class, 'updateSettings'])->name('settings.update');
+
+    // Order Management Routes
+    Route::prefix('dropshipping/orders')->as('orders.')->group(function () {
+        Route::get('/', [AdminOrderController::class, 'index'])->name('index');
+        Route::get('/{id}', [AdminOrderController::class, 'show'])->name('show');
+        Route::post('/{id}/approve', [AdminOrderController::class, 'approve'])->name('approve');
+        Route::post('/{id}/reject', [AdminOrderController::class, 'reject'])->name('reject');
+        Route::post('/{id}/update-status', [AdminOrderController::class, 'updateStatus'])->name('update.status');
+        Route::post('/bulk-action', [AdminOrderController::class, 'bulkAction'])->name('bulk.action');
+        Route::get('/export/csv', [AdminOrderController::class, 'export'])->name('export');
+        Route::get('/statistics/ajax', [AdminOrderController::class, 'getStatistics'])->name('statistics');
+    });
+
+    // Withdrawal Management Routes
+    Route::prefix('dropshipping/withdrawals')->as('withdrawals.')->group(function () {
+        Route::get('/', [AdminWithdrawalController::class, 'index'])->name('index');
+        Route::get('/{id}', [AdminWithdrawalController::class, 'show'])->name('show');
+        Route::post('/{id}/approve', [AdminWithdrawalController::class, 'approve'])->name('approve');
+        Route::post('/{id}/reject', [AdminWithdrawalController::class, 'reject'])->name('reject');
+        Route::post('/{id}/process', [AdminWithdrawalController::class, 'markAsProcessed'])->name('process');
+        Route::post('/bulk-action', [AdminWithdrawalController::class, 'bulkAction'])->name('bulk.action');
+        Route::get('/export/csv', [AdminWithdrawalController::class, 'export'])->name('export');
+        Route::get('/statistics/ajax', [AdminWithdrawalController::class, 'getStatistics'])->name('statistics');
+
+        // Withdrawal Settings
+        Route::get('/settings', [AdminWithdrawalController::class, 'settings'])->name('settings');
+        Route::post('/settings/update', [AdminWithdrawalController::class, 'updateSettings'])->name('settings.update');
+    });
 });

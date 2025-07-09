@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Plugin\Dropshipping\Http\Controllers\Tenant\DropshippingTenantController;
 use Plugin\Dropshipping\Http\Controllers\Tenant\ProductImportController;
+use Plugin\Dropshipping\Http\Controllers\Tenant\OrderManagementController;
+use Plugin\Dropshipping\Http\Controllers\Tenant\WithdrawalController;
 
 // Simple tenant routes for dropshipping
 Route::group(['prefix' => 'user', 'as' => 'user.dropshipping.', 'middleware' => ['auth']], function () {
@@ -18,6 +20,27 @@ Route::group(['prefix' => 'user', 'as' => 'user.dropshipping.', 'middleware' => 
 
     // Dashboard (optional)
     Route::get('/dropshipping-dashboard', [DropshippingTenantController::class, 'dashboard'])->name('dashboard');
+
+    // Order Management Routes
+    Route::prefix('dropshipping/orders')->as('orders.')->group(function () {
+        Route::get('/', [OrderManagementController::class, 'index'])->name('index');
+        Route::get('/create', [OrderManagementController::class, 'create'])->name('create');
+        Route::post('/', [OrderManagementController::class, 'store'])->name('store');
+        Route::get('/{id}', [OrderManagementController::class, 'show'])->name('show');
+        Route::post('/{id}/cancel', [OrderManagementController::class, 'cancel'])->name('cancel');
+        Route::get('/product-details/{productId}', [OrderManagementController::class, 'getProductDetails'])->name('product.details');
+    });
+
+    // Withdrawal Routes
+    Route::prefix('dropshipping/withdrawals')->as('withdrawals.')->group(function () {
+        Route::get('/', [WithdrawalController::class, 'index'])->name('index');
+        Route::get('/create', [WithdrawalController::class, 'create'])->name('create');
+        Route::post('/', [WithdrawalController::class, 'store'])->name('store');
+        Route::get('/{id}', [WithdrawalController::class, 'show'])->name('show');
+        Route::post('/{id}/cancel', [WithdrawalController::class, 'cancel'])->name('cancel');
+        Route::get('/info/ajax', [WithdrawalController::class, 'getWithdrawalInfo'])->name('info');
+        Route::post('/calculate-fee', [WithdrawalController::class, 'calculateFee'])->name('calculate.fee');
+    });
 });
 
 // Alternative routes without prefix for easier access
@@ -30,4 +53,17 @@ Route::group(['as' => 'dropshipping.', 'middleware' => ['auth']], function () {
     Route::post('/dropshipping/import/{productId}', [ProductImportController::class, 'importSingle'])->name('import.product');
     Route::get('/dropshipping/history', [ProductImportController::class, 'history'])->name('import.history');
     Route::get('/dropshipping/product-details/{productId}', [DropshippingTenantController::class, 'getProductDetails'])->name('product.details');
+
+    // Order Management (Direct Access)
+    Route::prefix('dropshipping')->group(function () {
+        Route::get('/order-management', [OrderManagementController::class, 'index'])->name('order.management');
+        Route::get('/order-management/create', [OrderManagementController::class, 'create'])->name('order.create');
+        Route::post('/order-management', [OrderManagementController::class, 'store'])->name('order.store');
+        Route::get('/order-management/{id}', [OrderManagementController::class, 'show'])->name('order.show');
+
+        // Withdrawals (Direct Access)
+        Route::get('/withdrawals', [WithdrawalController::class, 'index'])->name('withdrawals');
+        Route::get('/withdrawals/create', [WithdrawalController::class, 'create'])->name('withdrawal.create');
+        Route::post('/withdrawals', [WithdrawalController::class, 'store'])->name('withdrawal.store');
+    });
 });

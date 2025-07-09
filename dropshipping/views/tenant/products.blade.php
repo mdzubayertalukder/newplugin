@@ -59,6 +59,14 @@
                 <h4><i class="icofont-search-product"></i> {{ translate('Browse Products') }}</h4>
                 <p class="text-muted">{{ translate('Browse and import products from dropshipping stores') }}</p>
             </div>
+            <div class="d-flex gap-2">
+                <a href="{{ route('dropshipping.order.management') }}" class="btn btn-success">
+                    <i class="fas fa-shopping-cart"></i> {{ translate('Order Management') }}
+                </a>
+                <a href="{{ route('dropshipping.withdrawals') }}" class="btn btn-info">
+                    <i class="fas fa-money-bill-wave"></i> {{ translate('Withdrawals') }}
+                </a>
+            </div>
         </div>
     </div>
 </div>

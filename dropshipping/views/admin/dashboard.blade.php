@@ -117,6 +117,190 @@
     </div>
 </div>
 
+{{-- Dropshipping Order Statistics --}}
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <h5><i class="icofont-truck"></i> {{ translate('Dropshipping Orders Overview') }}</h5>
+    </div>
+</div>
+<div class="row">
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #6f42c1;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Total Orders') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">{{ number_format($totalDropshippingOrders) }}</h3>
+                        <small style="color: #28a745;">
+                            <i class="icofont-calendar"></i> {{ $todayOrders }} {{ translate('today') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(111,66,193,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-shopping-cart" style="font-size: 24px; color: #6f42c1;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #fd7e14;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Pending Orders') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">{{ number_format($pendingOrders) }}</h3>
+                        <small style="color: #fd7e14;">
+                            <i class="icofont-clock-time"></i> {{ translate('awaiting approval') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(253,126,20,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-clock-time" style="font-size: 24px; color: #fd7e14;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #20c997;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Approved Orders') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">{{ number_format($approvedOrders) }}</h3>
+                        <small style="color: #20c997;">
+                            <i class="icofont-check-circled"></i> {{ translate('ready to fulfill') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(32,201,151,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-check" style="font-size: 24px; color: #20c997;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #e83e8c;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Rejected Orders') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">{{ number_format($rejectedOrders) }}</h3>
+                        <small style="color: #e83e8c;">
+                            <i class="icofont-close-circled"></i> {{ translate('declined') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(232,62,140,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-close" style="font-size: 24px; color: #e83e8c;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Financial Overview --}}
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <h5><i class="icofont-money-bag"></i> {{ translate('Financial Overview') }}</h5>
+    </div>
+</div>
+<div class="row">
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #17a2b8;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Total Earnings') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">${{ number_format($totalEarnings, 2) }}</h3>
+                        <small style="color: #17a2b8;">
+                            <i class="icofont-chart-line"></i> {{ translate('all tenants') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(23,162,184,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-money-bag" style="font-size: 24px; color: #17a2b8;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #28a745;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Available Balance') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">${{ number_format($totalAvailableBalance, 2) }}</h3>
+                        <small style="color: #28a745;">
+                            <i class="icofont-check-circled"></i> {{ translate('ready to withdraw') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(40,167,69,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-wallet" style="font-size: 24px; color: #28a745;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #ffc107;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Pending Balance') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">${{ number_format($totalPendingBalance, 2) }}</h3>
+                        <small style="color: #ffc107;">
+                            <i class="icofont-clock-time"></i> {{ translate('awaiting approval') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(255,193,7,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-clock-time" style="font-size: 24px; color: #ffc107;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-30">
+        <div class="card h-100" style="border-left: 4px solid #6f42c1;">
+            <div class="card-body text-center">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-left">
+                        <h6 style="color: #666; text-transform: uppercase; font-size: 12px; margin-bottom: 5px;">
+                            {{ translate('Total Withdrawals') }}
+                        </h6>
+                        <h3 style="margin: 0; font-weight: bold; color: #333;">{{ number_format($totalWithdrawals) }}</h3>
+                        <small style="color: #6f42c1;">
+                            <i class="icofont-money"></i> ${{ number_format($totalWithdrawalAmount, 2) }} {{ translate('paid') }}
+                        </small>
+                    </div>
+                    <div class="icon-box" style="background: rgba(111,66,193,0.1); padding: 15px; border-radius: 50%;">
+                        <i class="icofont-bank-transfer-alt" style="font-size: 24px; color: #6f42c1;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- Quick Actions Panel --}}
 <div class="row mb-30">
     <div class="col-md-12">

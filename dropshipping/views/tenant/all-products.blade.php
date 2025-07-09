@@ -15,6 +15,12 @@
                     <p class="text-muted">Browse and import products from our partner stores</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <a href="{{ route('dropshipping.order.management') }}" class="btn btn-success">
+                        <i class="fas fa-shopping-cart"></i> Order Management
+                    </a>
+                    <a href="{{ route('dropshipping.withdrawals') }}" class="btn btn-info">
+                        <i class="fas fa-money-bill-wave"></i> Withdrawals
+                    </a>
                     <a href="{{ route('dropshipping.import.history') }}" class="btn btn-outline-primary">
                         <i class="fas fa-history"></i> Import History
                     </a>

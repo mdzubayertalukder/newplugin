@@ -13,6 +13,10 @@ use Plugin\Dropshipping\Services\WooCommerceApiService;
 use Plugin\Dropshipping\Models\DropshippingProduct;
 use Plugin\Dropshipping\Models\DropshippingPlanLimit;
 use Plugin\Dropshipping\Models\ProductImportHistory;
+use Plugin\Dropshipping\Models\DropshippingOrder;
+use Plugin\Dropshipping\Models\WithdrawalRequest;
+use Plugin\Dropshipping\Models\TenantBalance;
+use Carbon\Carbon;
 
 class WooCommerceConfigController extends Controller
 {
@@ -24,108 +28,115 @@ class WooCommerceConfigController extends Controller
     }
 
     /**
-     * Show dropshipping dashboard
+     * Display the main dropshipping dashboard for admin
      */
     public function dashboard()
     {
-        try {
-            // Basic Statistics
-            $totalConfigs = DB::table('dropshipping_woocommerce_configs')->count();
-            $activeConfigs = DB::table('dropshipping_woocommerce_configs')->where('is_active', 1)->count();
-            $totalProducts = DB::table('dropshipping_products')->count();
-            $totalImports = DB::table('dropshipping_product_import_history')->count();
+        // WooCommerce Store Statistics
+        $totalConfigs = WooCommerceConfig::count();
+        $activeConfigs = WooCommerceConfig::where('status', 'active')->count();
+        $syncingStores = WooCommerceConfig::where('sync_status', 'syncing')->count();
 
-            // Import Statistics
-            $todayImports = DB::table('dropshipping_product_import_history')
-                ->whereDate('created_at', today())
-                ->count();
+        // Product and Import Statistics
+        $totalProducts = DropshippingProduct::count();
+        $totalImports = ProductImportHistory::count();
+        $todayImports = ProductImportHistory::whereDate('created_at', Carbon::today())->count();
+        $successfulImports = ProductImportHistory::where('status', 'completed')->count();
+        $failedImports = ProductImportHistory::where('status', 'failed')->count();
 
-            $successfulImports = DB::table('dropshipping_product_import_history')
-                ->where('status', 'completed')
-                ->count();
+        // Recent Import Activity
+        $recentImports = ProductImportHistory::with(['woocommerceConfig'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
 
-            $failedImports = DB::table('dropshipping_product_import_history')
-                ->where('status', 'failed')
-                ->count();
+        // Recent Syncing Status
+        $recentSyncStatus = DB::table('product_import_history')
+            ->join('woocommerce_configs', 'product_import_history.woocommerce_config_id', '=', 'woocommerce_configs.id')
+            ->select('woocommerce_configs.store_name', 'product_import_history.*')
+            ->orderBy('product_import_history.created_at', 'desc')
+            ->limit(5)
+            ->get();
 
-            $pendingImports = DB::table('dropshipping_product_import_history')
-                ->where('status', 'pending')
-                ->count();
+        // Store Performance
+        $storePerformance = WooCommerceConfig::withCount(['products', 'importHistory'])
+            ->get()
+            ->map(function ($config) {
+                $successRate = $config->import_history_count > 0
+                    ? ($config->products_count / $config->import_history_count) * 100
+                    : 0;
 
-            // Recent Activities
-            $recentImports = DB::table('dropshipping_product_import_history')
-                ->leftJoin('dropshipping_woocommerce_configs', 'dropshipping_woocommerce_configs.id', '=', 'dropshipping_product_import_history.woocommerce_config_id')
-                ->leftJoin('dropshipping_products', 'dropshipping_products.id', '=', 'dropshipping_product_import_history.dropshipping_product_id')
-                ->select(
-                    'dropshipping_product_import_history.*',
-                    'dropshipping_woocommerce_configs.name as config_name',
-                    'dropshipping_products.name as product_name'
-                )
-                ->orderBy('dropshipping_product_import_history.created_at', 'desc')
-                ->limit(8)
-                ->get();
+                return [
+                    'store_name' => $config->store_name,
+                    'total_imports' => $config->import_history_count,
+                    'successful_imports' => $config->products_count,
+                    'success_rate' => round($successRate, 1),
+                    'last_sync' => $config->last_sync_at,
+                    'status' => $config->status
+                ];
+            });
 
-            // Top Performing Stores (by product count)
-            $topStores = DB::table('dropshipping_woocommerce_configs')
-                ->leftJoin('dropshipping_products', 'dropshipping_products.woocommerce_config_id', '=', 'dropshipping_woocommerce_configs.id')
-                ->select(
-                    'dropshipping_woocommerce_configs.name',
-                    'dropshipping_woocommerce_configs.store_url',
-                    'dropshipping_woocommerce_configs.is_active',
-                    'dropshipping_woocommerce_configs.last_sync_at',
-                    DB::raw('COUNT(dropshipping_products.id) as product_count')
-                )
-                ->groupBy('dropshipping_woocommerce_configs.id', 'dropshipping_woocommerce_configs.name', 'dropshipping_woocommerce_configs.store_url', 'dropshipping_woocommerce_configs.is_active', 'dropshipping_woocommerce_configs.last_sync_at')
-                ->orderBy('product_count', 'desc')
-                ->limit(5)
-                ->get();
+        // **NEW: Dropshipping Order Statistics**
+        $totalDropshippingOrders = DropshippingOrder::count();
+        $pendingOrders = DropshippingOrder::where('status', 'pending')->count();
+        $approvedOrders = DropshippingOrder::where('status', 'approved')->count();
+        $rejectedOrders = DropshippingOrder::where('status', 'rejected')->count();
+        $todayOrders = DropshippingOrder::whereDate('created_at', Carbon::today())->count();
 
-            // Monthly Import Trends (last 6 months)
-            $monthlyTrends = DB::table('dropshipping_product_import_history')
-                ->select(
-                    DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
-                    DB::raw('COUNT(*) as total_imports'),
-                    DB::raw('COUNT(CASE WHEN status = "completed" THEN 1 END) as successful_imports'),
-                    DB::raw('COUNT(CASE WHEN status = "failed" THEN 1 END) as failed_imports')
-                )
-                ->where('created_at', '>=', now()->subMonths(6))
-                ->groupBy('month')
-                ->orderBy('month', 'desc')
-                ->get();
+        // Recent Dropshipping Orders
+        $recentDropshippingOrders = DropshippingOrder::with(['submittedBy'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
 
-            // System Health Indicators
-            $syncingStores = DB::table('dropshipping_woocommerce_configs')
-                ->where('sync_status', 'syncing')
-                ->count();
+        // **NEW: Withdrawal Statistics**
+        $totalWithdrawals = WithdrawalRequest::count();
+        $pendingWithdrawals = WithdrawalRequest::where('status', 'pending')->count();
+        $approvedWithdrawals = WithdrawalRequest::where('status', 'approved')->count();
+        $rejectedWithdrawals = WithdrawalRequest::where('status', 'rejected')->count();
+        $totalWithdrawalAmount = WithdrawalRequest::where('status', 'approved')->sum('amount');
 
-            $lastSyncTime = DB::table('dropshipping_woocommerce_configs')
-                ->whereNotNull('last_sync_at')
-                ->max('last_sync_at');
-        } catch (\Exception $e) {
-            // Fallback values in case of database errors
-            $totalConfigs = $activeConfigs = $totalProducts = $totalImports = 0;
-            $todayImports = $successfulImports = $failedImports = $pendingImports = 0;
-            $recentImports = collect([]);
-            $topStores = collect([]);
-            $monthlyTrends = collect([]);
-            $syncingStores = 0;
-            $lastSyncTime = null;
-        }
+        // Recent Withdrawal Requests
+        $recentWithdrawals = WithdrawalRequest::with(['tenant', 'approvedBy'])
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        // **NEW: Tenant Balance Overview**
+        $totalPendingBalance = TenantBalance::sum('pending_balance');
+        $totalAvailableBalance = TenantBalance::sum('available_balance');
+        $totalEarnings = TenantBalance::sum('total_earnings');
 
         return view('plugin/dropshipping::admin.dashboard', compact(
             'totalConfigs',
             'activeConfigs',
+            'syncingStores',
             'totalProducts',
             'totalImports',
             'todayImports',
             'successfulImports',
             'failedImports',
-            'pendingImports',
             'recentImports',
-            'topStores',
-            'monthlyTrends',
-            'syncingStores',
-            'lastSyncTime'
+            'recentSyncStatus',
+            'storePerformance',
+            // New dropshipping order variables
+            'totalDropshippingOrders',
+            'pendingOrders',
+            'approvedOrders',
+            'rejectedOrders',
+            'todayOrders',
+            'recentDropshippingOrders',
+            // New withdrawal variables
+            'totalWithdrawals',
+            'pendingWithdrawals',
+            'approvedWithdrawals',
+            'rejectedWithdrawals',
+            'totalWithdrawalAmount',
+            'recentWithdrawals',
+            // New balance variables
+            'totalPendingBalance',
+            'totalAvailableBalance',
+            'totalEarnings'
         ));
     }
 
