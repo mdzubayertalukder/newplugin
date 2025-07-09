@@ -34,7 +34,7 @@ class WooCommerceConfigController extends Controller
     {
         // WooCommerce Store Statistics
         $totalConfigs = WooCommerceConfig::count();
-        $activeConfigs = WooCommerceConfig::where('status', 'active')->count();
+        $activeConfigs = WooCommerceConfig::where('is_active', 1)->count();
         $syncingStores = WooCommerceConfig::where('sync_status', 'syncing')->count();
 
         // Product and Import Statistics
@@ -72,7 +72,7 @@ class WooCommerceConfigController extends Controller
                     'successful_imports' => $config->products_count,
                     'success_rate' => round($successRate, 1),
                     'last_sync' => $config->last_sync_at,
-                    'status' => $config->status
+                    'status' => $config->is_active ? 'active' : 'inactive'
                 ];
             });
 
