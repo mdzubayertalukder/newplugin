@@ -77,36 +77,33 @@ class WooCommerceConfigController extends Controller
             ->limit(5)
             ->get();
 
-        // **NEW: Dropshipping Order Statistics**
-        $totalDropshippingOrders = DropshippingOrder::count();
-        $pendingOrders = DropshippingOrder::where('status', 'pending')->count();
-        $approvedOrders = DropshippingOrder::where('status', 'approved')->count();
-        $rejectedOrders = DropshippingOrder::where('status', 'rejected')->count();
-        $todayOrders = DropshippingOrder::whereDate('created_at', Carbon::today())->count();
+        // **NEW: Dropshipping Order Statistics** (placeholder for multi-tenant setup)
+        // Note: Order data is stored in tenant databases, so we provide placeholder values for admin overview
+        $totalDropshippingOrders = 0; // Would need to aggregate across all tenant databases
+        $pendingOrders = 0; // Would need to aggregate across all tenant databases
+        $approvedOrders = 0; // Would need to aggregate across all tenant databases
+        $rejectedOrders = 0; // Would need to aggregate across all tenant databases
+        $todayOrders = 0; // Would need to aggregate across all tenant databases
 
-        // Recent Dropshipping Orders
-        $recentDropshippingOrders = DropshippingOrder::with(['submittedBy'])
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+        // Recent Dropshipping Orders (empty for admin overview in multi-tenant setup)
+        $recentDropshippingOrders = collect(); // Would need to aggregate from all tenant databases
 
-        // **NEW: Withdrawal Statistics**
-        $totalWithdrawals = WithdrawalRequest::count();
-        $pendingWithdrawals = WithdrawalRequest::where('status', 'pending')->count();
-        $approvedWithdrawals = WithdrawalRequest::where('status', 'approved')->count();
-        $rejectedWithdrawals = WithdrawalRequest::where('status', 'rejected')->count();
-        $totalWithdrawalAmount = WithdrawalRequest::where('status', 'approved')->sum('amount');
+        // **NEW: Withdrawal Statistics** (placeholder for multi-tenant setup)
+        // Note: Withdrawal data is stored in tenant databases, so we provide placeholder values for admin overview
+        $totalWithdrawals = 0; // Would need to aggregate across all tenant databases
+        $pendingWithdrawals = 0; // Would need to aggregate across all tenant databases
+        $approvedWithdrawals = 0; // Would need to aggregate across all tenant databases
+        $rejectedWithdrawals = 0; // Would need to aggregate across all tenant databases
+        $totalWithdrawalAmount = 0; // Would need to aggregate across all tenant databases
 
-        // Recent Withdrawal Requests
-        $recentWithdrawals = WithdrawalRequest::with(['tenant', 'approvedBy'])
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+        // Recent Withdrawal Requests (empty for admin overview in multi-tenant setup)
+        $recentWithdrawals = collect(); // Would need to aggregate from all tenant databases
 
         // **NEW: Tenant Balance Overview**
-        $totalPendingBalance = TenantBalance::sum('pending_balance');
-        $totalAvailableBalance = TenantBalance::sum('available_balance');
-        $totalEarnings = TenantBalance::sum('total_earnings');
+        // Tenant Balance Overview (placeholder for multi-tenant setup)
+        $totalPendingBalance = 0; // Would need to aggregate across all tenant databases
+        $totalAvailableBalance = 0; // Would need to aggregate across all tenant databases
+        $totalEarnings = 0; // Would need to aggregate across all tenant databases
 
         return view('plugin/dropshipping::admin.dashboard', compact(
             'totalConfigs',
