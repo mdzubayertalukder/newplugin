@@ -17,7 +17,7 @@ class ProductImportHistory extends Model
         'dropshipping_product_id',
         'local_product_id',
         'import_type',
-        'status',
+        'import_status',
         'imported_data',
         'pricing_adjustments',
         'error_message',
@@ -68,7 +68,7 @@ class ProductImportHistory extends Model
      */
     public function localProduct()
     {
-        return $this->belongsTo(\Core\Models\Product::class, 'local_product_id');
+        return $this->belongsTo(\Plugin\TlcommerceCore\Models\Product::class, 'local_product_id');
     }
 
     /**
@@ -84,7 +84,7 @@ class ProductImportHistory extends Model
      */
     public function scopeSuccessful($query)
     {
-        return $query->where('status', 'completed');
+        return $query->where('import_status', 'completed');
     }
 
     /**
@@ -92,7 +92,7 @@ class ProductImportHistory extends Model
      */
     public function scopeFailed($query)
     {
-        return $query->where('status', 'failed');
+        return $query->where('import_status', 'failed');
     }
 
     /**
@@ -100,7 +100,7 @@ class ProductImportHistory extends Model
      */
     public function scopePending($query)
     {
-        return $query->where('status', 'pending');
+        return $query->where('import_status', 'pending');
     }
 
     /**
@@ -116,7 +116,7 @@ class ProductImportHistory extends Model
      */
     public function getStatusBadgeAttribute()
     {
-        switch ($this->status) {
+        switch ($this->import_status) {
             case 'completed':
                 return '<span class="badge badge-success">Completed</span>';
             case 'failed':
@@ -170,7 +170,7 @@ class ProductImportHistory extends Model
      */
     public function isSuccessful()
     {
-        return $this->status === 'completed';
+        return $this->import_status === 'completed';
     }
 
     /**
@@ -178,7 +178,7 @@ class ProductImportHistory extends Model
      */
     public function isFailed()
     {
-        return $this->status === 'failed';
+        return $this->import_status === 'failed';
     }
 
     /**
@@ -187,7 +187,7 @@ class ProductImportHistory extends Model
     public function markAsCompleted($localProductId = null)
     {
         $this->update([
-            'status' => 'completed',
+            'import_status' => 'completed',
             'local_product_id' => $localProductId,
             'imported_at' => now()
         ]);
@@ -199,7 +199,7 @@ class ProductImportHistory extends Model
     public function markAsFailed($errorMessage)
     {
         $this->update([
-            'status' => 'failed',
+            'import_status' => 'failed',
             'error_message' => $errorMessage
         ]);
     }

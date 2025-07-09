@@ -39,24 +39,19 @@ class WooCommerceConfigController extends Controller
 
         // Product and Import Statistics
         $totalProducts = DropshippingProduct::count();
-        $totalImports = ProductImportHistory::count();
-        $todayImports = ProductImportHistory::whereDate('created_at', Carbon::today())->count();
-        $successfulImports = ProductImportHistory::where('status', 'completed')->count();
-        $failedImports = ProductImportHistory::where('status', 'failed')->count();
+        // Note: Import statistics are stored in tenant databases, so we provide placeholder values for admin overview
+        $totalImports = 0; // Would need to aggregate across all tenant databases
+        $todayImports = 0; // Would need to aggregate across all tenant databases  
+        $successfulImports = 0; // Would need to aggregate across all tenant databases
+        $failedImports = 0; // Would need to aggregate across all tenant databases
+        $pendingImports = 0; // Would need to aggregate across all tenant databases
 
-        // Recent Import Activity
-        $recentImports = ProductImportHistory::with(['woocommerceConfig'])
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+        // Recent Import Activity (empty for admin overview in multi-tenant setup)
+        $recentImports = collect(); // Would need to aggregate from all tenant databases
 
-        // Recent Syncing Status
-        $recentSyncStatus = DB::table('product_import_history')
-            ->join('woocommerce_configs', 'product_import_history.woocommerce_config_id', '=', 'woocommerce_configs.id')
-            ->select('woocommerce_configs.store_name', 'product_import_history.*')
-            ->orderBy('product_import_history.created_at', 'desc')
-            ->limit(5)
-            ->get();
+        // Recent Syncing Status (placeholder for multi-tenant setup)
+        $recentSyncStatus = collect(); // Would need to aggregate from all tenant databases
+        $lastSyncTime = null; // Would need to determine from all tenant databases
 
         // Store Performance
         $storePerformance = WooCommerceConfig::withCount(['products', 'importHistory'])
@@ -75,6 +70,12 @@ class WooCommerceConfigController extends Controller
                     'status' => $config->is_active ? 'active' : 'inactive'
                 ];
             });
+
+        // Top Stores (based on product count)
+        $topStores = WooCommerceConfig::where('is_active', 1)
+            ->orderBy('total_products', 'desc')
+            ->limit(5)
+            ->get();
 
         // **NEW: Dropshipping Order Statistics**
         $totalDropshippingOrders = DropshippingOrder::count();
@@ -116,9 +117,12 @@ class WooCommerceConfigController extends Controller
             'todayImports',
             'successfulImports',
             'failedImports',
+            'pendingImports',
             'recentImports',
             'recentSyncStatus',
+            'lastSyncTime',
             'storePerformance',
+            'topStores',
             // New dropshipping order variables
             'totalDropshippingOrders',
             'pendingOrders',
