@@ -41,6 +41,7 @@ class ProductImportService
                 'weight' => $dropshippingProduct->weight,
                 'status' => 'publish',
                 'featured' => $dropshippingProduct->featured,
+                'supplier' => getSupperAdminId(), // Add this line to assign to admin
                 'meta_data' => json_encode([
                     'dropshipping_source' => 'woocommerce',
                     'source_product_id' => $dropshippingProduct->woocommerce_product_id,

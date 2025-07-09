@@ -178,6 +178,7 @@ class ProductImportController extends Controller
                 'is_enable_tax' => 2, // Tax not enabled
                 'status' => 1, // Active
                 'is_approved' => 1, // Approved
+                'supplier' => getSupperAdminId(), // Add this line to assign to admin
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
