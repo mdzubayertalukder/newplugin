@@ -17,7 +17,7 @@ return new class extends Migration
             $table->decimal('total_earnings', 12, 2)->default(0.00);
             $table->decimal('available_balance', 12, 2)->default(0.00);
             $table->decimal('pending_balance', 12, 2)->default(0.00);
-            $table->decimal('withdrawn_amount', 12, 2)->default(0.00);
+            $table->decimal('total_withdrawn', 12, 2)->default(0.00);
             $table->integer('total_orders')->default(0);
             $table->integer('pending_orders')->default(0);
             $table->integer('approved_orders')->default(0);

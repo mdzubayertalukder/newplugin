@@ -1,176 +1,141 @@
-# Dropshipping Plugin for TLCommerce
+# Dropshipping Plugin Database Fix
 
-A comprehensive dropshipping plugin that integrates WooCommerce stores with your multi-tenant TLCommerce platform.
+## Issue: "Table 'tenant_balances' doesn't exist" Error
 
-## Features
-
-### Super Admin Features
-- **WooCommerce Store Management**: Add and configure multiple WooCommerce stores
-- **Product Synchronization**: Sync products from connected WooCommerce stores
-- **Plan Limits Management**: Set import limits per subscription package
-- **Comprehensive Reports**: View import activities and usage statistics
-- **Global Settings**: Configure plugin-wide settings
-
-### Tenant Features
-- **Product Browsing**: Browse available products from connected WooCommerce stores
-- **Single & Bulk Import**: Import individual products or in bulk with custom pricing
-- **Import History**: Track all import activities with detailed logs
-- **Pricing Management**: Set markup percentages and fixed markups
-- **Import Limits**: View current usage against subscription limits
-
-## Installation
-
-### Method 1: Direct File Copy
-1. Copy the entire `dropshipping` folder to your `plugins/` directory
-2. Run the following command to install database tables:
-```bash
-php artisan migrate --path=plugins/dropshipping/data.sql
+If you're encountering this error:
+```
+SQLSTATE[42S02]: Base table or view not found: 1146 Table 'multipurc_dealfinal11111.tenant_balances' doesn't exist
 ```
 
-### Method 2: Plugin Upload (Recommended)
-1. Create a zip file of the dropshipping plugin:
+This happens because the dropshipping plugin's database tables haven't been created for your tenant database.
+
+## Quick Fix
+
+### Option 1: Run the Fix Script (Recommended)
+
+From your project root directory, run:
+
 ```bash
-cd plugins
-zip -r dropshipping.zip dropshipping/
+php plugins/dropshipping/fix_database.php
 ```
 
-2. Upload via Super Admin Panel:
-   - Go to **Admin Dashboard** → **Plugins**
-   - Click **Install Plugin**
-   - Upload the `dropshipping.zip` file
-   - The plugin will be automatically installed and registered
+This script will:
+- Check which dropshipping tables are missing
+- Create all required tables automatically
+- Verify the installation was successful
 
-3. Activate the plugin:
-   - Go to **Admin Dashboard** → **Plugins**
-   - Find "Dropshipping" in the plugin list
-   - Click **Activate**
+### Option 2: Manual SQL Execution
 
-## Configuration
+If the script doesn't work, you can manually run the SQL statements:
 
-### 1. WooCommerce Store Setup
-1. Navigate to **Dropshipping** → **WooCommerce Stores**
-2. Click **Add New Store**
-3. Fill in the required information:
-   - **Store Name**: A friendly name for identification
-   - **Store URL**: Your WooCommerce store URL (e.g., https://yourstore.com)
-   - **Consumer Key**: WooCommerce REST API Consumer Key
-   - **Consumer Secret**: WooCommerce REST API Consumer Secret
-4. Test the connection before saving
-5. Set the store as **Active** to make it available for tenants
+1. Connect to your tenant database (e.g., `multipurc_dealfinal11111`)
+2. Execute the SQL from `plugins/dropshipping/data.sql`
 
-### 2. WooCommerce API Setup
-To get the Consumer Key and Secret:
-1. Go to your WooCommerce admin → **WooCommerce** → **Settings** → **Advanced** → **REST API**
-2. Click **Create an API key**
-3. Set permissions to **Read**
-4. Copy the Consumer Key and Consumer Secret
+The most important tables for fixing the immediate error are:
 
-### 3. Plan Limits Configuration
-1. Navigate to **Dropshipping** → **Plan Limits**
-2. Configure limits for each subscription package:
-   - **Monthly Import Limit**: Maximum imports per month (-1 for unlimited)
-   - **Bulk Import Limit**: Maximum products per bulk import
-   - **Auto Sync**: Enable/disable automatic product syncing
+```sql
+-- Tenant Balances Table (fixes the main error)
+CREATE TABLE IF NOT EXISTS `tenant_balances` (
+    `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id` varchar(255) NOT NULL UNIQUE,
+    `total_earnings` decimal(12,2) NOT NULL DEFAULT 0.00,
+    `available_balance` decimal(12,2) NOT NULL DEFAULT 0.00,
+    `pending_balance` decimal(12,2) NOT NULL DEFAULT 0.00,
+    `total_withdrawn` decimal(12,2) NOT NULL DEFAULT 0.00,
+    `total_orders` int(11) NOT NULL DEFAULT 0,
+    `pending_orders` int(11) NOT NULL DEFAULT 0,
+    `approved_orders` int(11) NOT NULL DEFAULT 0,
+    `created_at` timestamp NULL DEFAULT NULL,
+    `updated_at` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `tenant_balances_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-## Usage
+-- Dropshipping Orders Table
+CREATE TABLE IF NOT EXISTS `dropshipping_orders` (
+    `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id` varchar(255) NOT NULL,
+    `order_number` varchar(255) NOT NULL UNIQUE,
+    `original_order_id` bigint(20) UNSIGNED NULL,
+    `order_code` varchar(255) NULL,
+    `local_product_id` bigint(20) UNSIGNED NULL,
+    `dropshipping_product_id` bigint(20) UNSIGNED NULL,
+    `product_name` varchar(255) NOT NULL,
+    `product_sku` varchar(255) NULL,
+    `quantity` int(11) NOT NULL,
+    `unit_price` decimal(10,2) NOT NULL,
+    `total_amount` decimal(10,2) NOT NULL,
+    `commission_rate` decimal(5,2) NOT NULL DEFAULT 20.00,
+    `commission_amount` decimal(10,2) NOT NULL,
+    `tenant_earning` decimal(10,2) NOT NULL,
+    `customer_name` varchar(255) NOT NULL,
+    `customer_email` varchar(255) NULL,
+    `customer_phone` varchar(255) NULL,
+    `shipping_address` text NULL,
+    `fulfillment_note` text NULL,
+    `status` enum('pending','approved','rejected','processing','shipped','delivered','cancelled') NOT NULL DEFAULT 'pending',
+    `admin_notes` text NULL,
+    `rejection_reason` text NULL,
+    `submitted_at` timestamp NULL DEFAULT NULL,
+    `approved_at` timestamp NULL DEFAULT NULL,
+    `shipped_at` timestamp NULL DEFAULT NULL,
+    `delivered_at` timestamp NULL DEFAULT NULL,
+    `submitted_by` bigint(20) UNSIGNED NOT NULL,
+    `approved_by` bigint(20) UNSIGNED NULL,
+    `created_at` timestamp NULL DEFAULT NULL,
+    `updated_at` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `dropshipping_orders_tenant_id_status_index` (`tenant_id`, `status`),
+    KEY `dropshipping_orders_status_index` (`status`),
+    KEY `dropshipping_orders_created_at_index` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
 
-### For Tenants
+### Option 3: Laravel Migrations (For New Tenants)
 
-#### Browsing Products
-1. Go to **Dropshipping** → **Browse Products**
-2. Select a WooCommerce store from the dropdown
-3. Use search and filters to find products
-4. Click on products to view details
+For new tenant setups, ensure the dropshipping migrations are run:
 
-#### Importing Products
-1. **Single Import**:
-   - Click the import button on any product
-   - Set your markup percentage or fixed markup
-   - Choose import options (reviews, gallery images)
-   - Click **Import Product**
+```bash
+php artisan migrate --path=/plugins/dropshipping/database/migrations
+```
 
-2. **Bulk Import**:
-   - Select multiple products using checkboxes
-   - Click **Bulk Import**
-   - Configure pricing settings
-   - Confirm the import
+## What Was Fixed
 
-#### Managing Imported Products
-1. Go to **Dropshipping** → **Imported Products**
-2. View all successfully imported products
-3. Update pricing or sync individual products
-4. Remove products if needed
+1. **Column Mismatch**: Fixed `withdrawn_amount` vs `total_withdrawn` column naming inconsistency
+2. **Missing Tables**: Added all required dropshipping tables to `data.sql`
+3. **Database Setup**: Created a fix script to automatically resolve missing table issues
 
-#### Monitoring Usage
-1. Go to **Dropshipping** → **Import Limits**
-2. View your current usage against subscription limits
-3. Track monthly and total import counts
+## Required Tables
 
-### For Super Admins
+The dropshipping plugin requires these tables:
+- `tenant_balances` - Stores tenant earning balances
+- `dropshipping_orders` - Stores dropshipping orders
+- `withdrawal_requests` - Stores withdrawal requests
+- `dropshipping_woocommerce_configs` - WooCommerce API configurations
+- `dropshipping_products` - Imported products from WooCommerce
+- `dropshipping_product_import_history` - Import history tracking
+- `dropshipping_plan_limits` - Plan-based limitations
+- `dropshipping_settings` - Plugin settings
 
-#### Managing Stores
-1. **Add Store**: Configure new WooCommerce connections
-2. **Edit Store**: Update store credentials or settings
-3. **Test Connection**: Verify API connectivity
-4. **Sync Products**: Manually trigger product synchronization
+## Testing the Fix
 
-#### Monitoring Activity
-1. **Import Reports**: View detailed import activities across all tenants
-2. **Usage Reports**: Monitor tenant usage patterns
-3. **Dashboard**: Overview of system-wide statistics
+After running the fix:
 
-#### Configuration
-1. **Settings**: Configure global plugin settings
-2. **Plan Limits**: Set import restrictions per subscription package
+1. Visit your dropshipping order management page
+2. The error should be resolved
+3. You should see an empty balance and order list (for new tenants)
 
-## Technical Details
+## Prevention for Future Tenants
 
-### Database Tables
-- `dropshipping_woocommerce_configs`: WooCommerce store configurations
-- `dropshipping_products`: Cached product data from WooCommerce stores
-- `dropshipping_product_import_history`: Import activity logs
-- `dropshipping_plan_limits`: Subscription package limits
-- `dropshipping_settings`: Plugin configuration settings
-
-### Routes
-- **Admin Routes**: `/admin/dropshipping/*`
-- **Tenant Routes**: `/user/dropshipping/*`
-
-### Permissions
-The plugin integrates with the existing permission system. Ensure users have appropriate roles to access dropshipping features.
-
-## Troubleshooting
-
-### Plugin Not Appearing
-1. Verify the plugin is properly activated in the plugins list
-2. Check that the `tl_plugins` table contains the dropshipping entry
-3. Clear application cache: `php artisan cache:clear`
-
-### WooCommerce Connection Issues
-1. Verify WooCommerce REST API is enabled
-2. Check Consumer Key and Secret are correct
-3. Ensure store URL is accessible and correct
-4. Verify SSL certificates if using HTTPS
-
-### Import Failures
-1. Check import limits haven't been exceeded
-2. Verify product exists in the source WooCommerce store
-3. Check error logs in the import history
-
-### Navigation Not Showing
-1. Ensure plugin is activated
-2. Verify user has appropriate permissions
-3. Check if navigation cache needs clearing
+To prevent this issue for new tenants:
+1. Ensure the `data.sql` file is properly loaded when new tenant databases are created
+2. Or run the dropshipping migrations as part of the tenant setup process
 
 ## Support
 
-For technical support or feature requests, please contact the development team.
+If you continue to experience issues after running the fix script, check:
+1. Database permissions
+2. PHP error logs
+3. Laravel logs in `storage/logs/`
 
-## Version History
-
-### v1.0.0
-- Initial release with core dropshipping functionality
-- WooCommerce integration
-- Product import system
-- Plan limits management
-- Comprehensive reporting 
+The fix script will provide detailed output about what was created and any errors encountered. 
