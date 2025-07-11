@@ -401,23 +401,35 @@
                         <td>{{ translate('Tenant ID') }}:</td>
                         <td><span class="badge bg-info text-white">{{ $order->tenant_id }}</span></td>
                     </tr>
+                    @if(isset($order->tenant_database))
+                    <tr>
+                        <td>{{ translate('Tenant Database') }}:</td>
+                        <td><code class="text-primary">{{ $order->tenant_database }}</code></td>
+                    </tr>
+                    @endif
+                    @if(isset($order->original_order) && $order->original_order)
+                    <tr>
+                        <td>{{ translate('Original Order') }}:</td>
+                        <td><strong>{{ $order->original_order->order_code }}</strong></td>
+                    </tr>
+                    @endif
                     <tr>
                         <td>{{ translate('Submitted By') }}:</td>
                         <td>
-                            @if($order->submittedBy)
-                            <strong>{{ $order->submittedBy->name }}</strong>
-                            <br><small class="text-muted">{{ $order->submittedBy->email }}</small>
+                            @if(isset($order->submitted_user) && $order->submitted_user)
+                            <strong>{{ $order->submitted_user->name }}</strong>
+                            <br><small class="text-muted">{{ $order->submitted_user->email }}</small>
                             @else
                             <span class="text-muted">{{ translate('User not found') }}</span>
                             @endif
                         </td>
                     </tr>
-                    @if($order->approvedBy)
+                    @if(isset($order->approved_user) && $order->approved_user)
                     <tr>
                         <td>{{ translate('Approved By') }}:</td>
                         <td>
-                            <strong>{{ $order->approvedBy->name }}</strong>
-                            <br><small class="text-muted">{{ $order->approvedBy->email }}</small>
+                            <strong>{{ $order->approved_user->name }}</strong>
+                            <br><small class="text-muted">{{ $order->approved_user->email }}</small>
                         </td>
                     </tr>
                     @endif
@@ -518,6 +530,184 @@
             </div>
         </div>
     </div>
+
+    {{-- Enhanced Customer Details Section --}}
+    @if(isset($order->shipping_info) || isset($order->billing_info) || isset($order->payment_info))
+    <div class="row">
+        {{-- Shipping Information --}}
+        @if(isset($order->shipping_info) && $order->shipping_info)
+        <div class="col-lg-4">
+            <div class="info-card animate-fade-in" style="animation-delay: 0.5s">
+                <h5><i class="icofont-truck"></i> {{ translate('Shipping Information') }}</h5>
+                <table class="table info-table">
+                    @if($order->shipping_info->name)
+                    <tr>
+                        <td>{{ translate('Name') }}:</td>
+                        <td><span class="value-highlight">{{ $order->shipping_info->name }}</span></td>
+                    </tr>
+                    @endif
+                    @if($order->shipping_info->email)
+                    <tr>
+                        <td>{{ translate('Email') }}:</td>
+                        <td><small>{{ $order->shipping_info->email }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->shipping_info->phone)
+                    <tr>
+                        <td>{{ translate('Phone') }}:</td>
+                        <td><small>{{ $order->shipping_info->phone }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->shipping_info->address)
+                    <tr>
+                        <td>{{ translate('Address') }}:</td>
+                        <td><small>{{ $order->shipping_info->address }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->shipping_info->city)
+                    <tr>
+                        <td>{{ translate('City') }}:</td>
+                        <td><small>{{ $order->shipping_info->city }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->shipping_info->state)
+                    <tr>
+                        <td>{{ translate('State') }}:</td>
+                        <td><small>{{ $order->shipping_info->state }}</small></td>
+                    </tr>
+                    @endif
+                </table>
+            </div>
+        </div>
+        @endif
+
+        {{-- Billing Information --}}
+        @if(isset($order->billing_info) && $order->billing_info)
+        <div class="col-lg-4">
+            <div class="info-card animate-fade-in" style="animation-delay: 0.6s">
+                <h5><i class="icofont-bill"></i> {{ translate('Billing Information') }}</h5>
+                <table class="table info-table">
+                    @if($order->billing_info->name)
+                    <tr>
+                        <td>{{ translate('Name') }}:</td>
+                        <td><span class="value-highlight">{{ $order->billing_info->name }}</span></td>
+                    </tr>
+                    @endif
+                    @if($order->billing_info->email)
+                    <tr>
+                        <td>{{ translate('Email') }}:</td>
+                        <td><small>{{ $order->billing_info->email }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->billing_info->phone)
+                    <tr>
+                        <td>{{ translate('Phone') }}:</td>
+                        <td><small>{{ $order->billing_info->phone }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->billing_info->address)
+                    <tr>
+                        <td>{{ translate('Address') }}:</td>
+                        <td><small>{{ $order->billing_info->address }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->billing_info->city)
+                    <tr>
+                        <td>{{ translate('City') }}:</td>
+                        <td><small>{{ $order->billing_info->city }}</small></td>
+                    </tr>
+                    @endif
+                    @if($order->billing_info->state)
+                    <tr>
+                        <td>{{ translate('State') }}:</td>
+                        <td><small>{{ $order->billing_info->state }}</small></td>
+                    </tr>
+                    @endif
+                </table>
+            </div>
+        </div>
+        @endif
+
+        {{-- Payment Information --}}
+        @if(isset($order->payment_info) && $order->payment_info)
+        <div class="col-lg-4">
+            <div class="info-card animate-fade-in" style="animation-delay: 0.7s">
+                <h5><i class="icofont-credit-card"></i> {{ translate('Payment Information') }}</h5>
+                <table class="table info-table">
+                    <tr>
+                        <td>{{ translate('Payment Method') }}:</td>
+                        <td><span class="badge bg-success text-white">{{ $order->payment_info->name }}</span></td>
+                    </tr>
+                    @if(isset($order->original_order))
+                    <tr>
+                        <td>{{ translate('Payment Status') }}:</td>
+                        <td>
+                            @if($order->original_order->payment_status == 1)
+                            <span class="badge bg-success">{{ translate('Paid') }}</span>
+                            @else
+                            <span class="badge bg-warning">{{ translate('Unpaid') }}</span>
+                            @endif
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>{{ translate('Total Paid') }}:</td>
+                        <td><span class="value-amount text-success">${{ number_format($order->original_order->total_payable_amount, 2) }}</span></td>
+                    </tr>
+                    @endif
+                </table>
+            </div>
+        </div>
+        @endif
+    </div>
+    @endif
+
+    {{-- Detailed Products Information --}}
+    @if(isset($order->order_products) && count($order->order_products) > 0)
+    <div class="row">
+        <div class="col-12">
+            <div class="info-card animate-fade-in" style="animation-delay: 0.8s">
+                <h5><i class="icofont-box"></i> {{ translate('Order Products Details') }}</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>{{ translate('Product') }}</th>
+                                <th>{{ translate('Quantity') }}</th>
+                                <th>{{ translate('Unit Price') }}</th>
+                                <th>{{ translate('Total') }}</th>
+                                <th>{{ translate('Delivery Status') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($order->order_products as $product)
+                            <tr>
+                                <td>
+                                    <strong>{{ $product->product_name }}</strong>
+                                    @if($product->product_sku)
+                                    <br><small class="text-muted">SKU: {{ $product->product_sku }}</small>
+                                    @endif
+                                </td>
+                                <td><span class="badge bg-light text-dark">{{ $product->quantity }}</span></td>
+                                <td>${{ number_format($product->unit_price, 2) }}</td>
+                                <td><strong>${{ number_format($product->quantity * $product->unit_price, 2) }}</strong></td>
+                                <td>
+                                    @if($product->delivery_status == 1)
+                                    <span class="badge bg-success">{{ translate('Delivered') }}</span>
+                                    @elseif($product->delivery_status == 2)
+                                    <span class="badge bg-warning">{{ translate('Processing') }}</span>
+                                    @else
+                                    <span class="badge bg-secondary">{{ translate('Pending') }}</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 
     {{-- Timeline Section --}}
     <div class="row">

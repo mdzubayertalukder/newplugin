@@ -129,6 +129,57 @@ Route::group(['prefix' => getAdminPrefix(), 'as' => 'admin.dropshipping.', 'midd
         }
     })->name('debug.sync');
 
+    // DEBUG: Check orders in tenant databases (temporary)
+    Route::get('/dropshipping/debug/check-orders', function () {
+        try {
+            $tenants = DB::connection('mysql')->table('tenants')->get();
+            $allOrders = [];
+
+            foreach ($tenants as $tenant) {
+                $tenantData = json_decode($tenant->data, true);
+                if (isset($tenantData['tenancy_db_name'])) {
+                    $database = $tenantData['tenancy_db_name'];
+
+                    try {
+                        $connectionName = 'tenant_' . $database;
+                        $tenantConfig = config('database.connections.mysql');
+                        $tenantConfig['database'] = $database;
+                        config(["database.connections.$connectionName" => $tenantConfig]);
+
+                        // Test connection
+                        DB::connection($connectionName)->getPdo();
+
+                        // Check if table exists
+                        $tableExists = DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders');
+
+                        if ($tableExists) {
+                            $orders = DB::connection($connectionName)->table('dropshipping_orders')
+                                ->select('id', 'order_number', 'tenant_id', 'status', 'created_at')
+                                ->limit(10)
+                                ->get();
+
+                            $allOrders[$database] = [
+                                'count' => DB::connection($connectionName)->table('dropshipping_orders')->count(),
+                                'orders' => $orders
+                            ];
+                        } else {
+                            $allOrders[$database] = ['error' => 'dropshipping_orders table does not exist'];
+                        }
+                    } catch (\Exception $e) {
+                        $allOrders[$database] = ['error' => $e->getMessage()];
+                    }
+                }
+            }
+
+            return response()->json([
+                'tenant_databases_found' => count($tenants),
+                'orders_by_database' => $allOrders
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()]);
+        }
+    })->name('debug.check.orders');
+
     // Plan Limits Management
     Route::get('/dropshipping/plan-limits', [WooCommerceConfigController::class, 'planLimits'])->name('plan-limits.index');
     Route::post('/dropshipping/plan-limits', [WooCommerceConfigController::class, 'storePlanLimits'])->name('plan-limits.store');
@@ -145,6 +196,36 @@ Route::group(['prefix' => getAdminPrefix(), 'as' => 'admin.dropshipping.', 'midd
     // Order Management Routes
     Route::prefix('dropshipping/orders')->as('orders.')->group(function () {
         Route::get('/', [AdminOrderController::class, 'index'])->name('index');
+
+        // DEBUG: Add debug route to test order retrieval
+        Route::get('/debug/{id}', function ($id) {
+            try {
+                $controller = new AdminOrderController();
+                $order = $controller->show($id);
+
+                if ($order instanceof \Illuminate\Http\RedirectResponse) {
+                    return response()->json([
+                        'error' => 'Order not found',
+                        'id' => $id,
+                        'redirect' => true
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'order_found' => true,
+                    'order_id' => $id,
+                    'view_data' => $order->getData()
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'id' => $id
+                ]);
+            }
+        })->name('debug');
+
         Route::get('/{id}', [AdminOrderController::class, 'show'])->name('show');
         Route::post('/{id}/approve', [AdminOrderController::class, 'approve'])->name('approve');
         Route::post('/{id}/reject', [AdminOrderController::class, 'reject'])->name('reject');
