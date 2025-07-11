@@ -58,6 +58,12 @@ $dropshippingActive = file_exists(base_path('plugins/dropshipping/plugin.json'))
         <li class="{{ Request::routeIs(['admin.dropshipping.plan-limits.*']) ? 'active' : '' }}">
             <a href="{{ route('admin.dropshipping.plan-limits.index') }}">{{ translate('Plan Limits') }}</a>
         </li>
+        <li class="{{ Request::routeIs(['admin.dropshipping.orders.*']) ? 'active' : '' }}">
+            <a href="{{ route('admin.dropshipping.orders.index') }}">{{ translate('Order Management') }}</a>
+        </li>
+        <li class="{{ Request::routeIs(['admin.dropshipping.withdrawals.*']) ? 'active' : '' }}">
+            <a href="{{ route('admin.dropshipping.withdrawals.index') }}">{{ translate('Withdrawal Management') }}</a>
+        </li>
         <li class="{{ Request::routeIs(['admin.dropshipping.reports.*']) ? 'active' : '' }}">
             <a href="#">{{ translate('Reports') }}</a>
             <ul class="nav sub-menu">

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Plugin\Dropshipping\Models\DropshippingOrder;
 use Plugin\Dropshipping\Models\TenantBalance;
 
@@ -16,45 +18,78 @@ class OrderManagementController extends Controller
      */
     public function index(Request $request)
     {
-        $query = DropshippingOrder::with(['localProduct', 'dropshippingProduct', 'submittedBy', 'approvedBy']);
+        // Get all tenant databases to aggregate orders from
+        $allOrders = collect();
+        $tenantDatabases = $this->getAllTenantDatabases();
 
-        // Filter by status
-        if ($request->filled('status') && $request->status !== 'all') {
-            $query->byStatus($request->status);
+        foreach ($tenantDatabases as $tenantDb) {
+            try {
+                // Connect to each tenant database
+                $tenantConnection = $this->getTenantConnection($tenantDb);
+
+                if ($tenantConnection) {
+                    $query = DropshippingOrder::on($tenantConnection);
+                    // Note: Removed relationships to avoid cross-database issues
+                    // ->with(['localProduct', 'dropshippingProduct', 'submittedBy', 'approvedBy']);
+
+                    // Apply filters
+                    if ($request->filled('status') && $request->status !== 'all') {
+                        $query->byStatus($request->status);
+                    }
+
+                    if ($request->filled('tenant_id')) {
+                        $query->forTenant($request->tenant_id);
+                    }
+
+                    if ($request->filled('search')) {
+                        $search = $request->search;
+                        $query->where(function ($q) use ($search) {
+                            $q->where('order_number', 'LIKE', "%{$search}%")
+                                ->orWhere('product_name', 'LIKE', "%{$search}%")
+                                ->orWhere('customer_name', 'LIKE', "%{$search}%");
+                        });
+                    }
+
+                    $orders = $query->get();
+                    $allOrders = $allOrders->merge($orders);
+                }
+            } catch (\Exception $e) {
+                // Log error and continue with other tenant databases
+                \Log::error("Failed to query tenant database {$tenantDb}: " . $e->getMessage());
+                continue;
+            }
         }
 
-        // Filter by tenant
-        if ($request->filled('tenant_id')) {
-            $query->forTenant($request->tenant_id);
-        }
+        // Sort all orders by created_at descending
+        $allOrders = $allOrders->sortByDesc('created_at');
 
-        // Search by order number or product name
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('order_number', 'LIKE', "%{$search}%")
-                    ->orWhere('product_name', 'LIKE', "%{$search}%")
-                    ->orWhere('customer_name', 'LIKE', "%{$search}%");
-            });
-        }
+        // Paginate manually
+        $page = $request->get('page', 1);
+        $perPage = 20;
+        $offset = ($page - 1) * $perPage;
+        $paginatedOrders = $allOrders->slice($offset, $perPage);
 
-        $orders = $query->orderBy('created_at', 'desc')->paginate(20);
+        // Create a paginator
+        $orders = new \Illuminate\Pagination\LengthAwarePaginator(
+            $paginatedOrders,
+            $allOrders->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
-        // Get statistics
+        // Get statistics from all tenant databases
         $stats = [
-            'total_orders' => DropshippingOrder::count(),
-            'pending_orders' => DropshippingOrder::byStatus('pending')->count(),
-            'approved_orders' => DropshippingOrder::byStatus('approved')->count(),
-            'rejected_orders' => DropshippingOrder::byStatus('rejected')->count(),
-            'shipped_orders' => DropshippingOrder::byStatus('shipped')->count(),
-            'delivered_orders' => DropshippingOrder::byStatus('delivered')->count(),
+            'total_orders' => $allOrders->count(),
+            'pending_orders' => $allOrders->where('status', 'pending')->count(),
+            'approved_orders' => $allOrders->where('status', 'approved')->count(),
+            'rejected_orders' => $allOrders->where('status', 'rejected')->count(),
+            'shipped_orders' => $allOrders->where('status', 'shipped')->count(),
+            'delivered_orders' => $allOrders->where('status', 'delivered')->count(),
         ];
 
         // Get unique tenants for filter
-        $tenants = DropshippingOrder::select('tenant_id')
-            ->distinct()
-            ->get()
-            ->pluck('tenant_id');
+        $tenants = $allOrders->pluck('tenant_id')->unique()->sort();
 
         return view('plugin/dropshipping::admin.order-management.index', compact('orders', 'stats', 'tenants'));
     }
@@ -64,14 +99,45 @@ class OrderManagementController extends Controller
      */
     public function show($id)
     {
-        $order = DropshippingOrder::with([
-            'localProduct',
-            'dropshippingProduct',
-            'submittedBy',
-            'approvedBy'
-        ])->findOrFail($id);
+        $order = $this->findOrderInTenantDatabases($id);
+
+        if (!$order) {
+            abort(404, 'Order not found');
+        }
 
         return view('plugin/dropshipping::admin.order-management.show', compact('order'));
+    }
+
+    /**
+     * Find an order across all tenant databases
+     */
+    private function findOrderInTenantDatabases($orderId)
+    {
+        $tenantDatabases = $this->getAllTenantDatabases();
+
+        foreach ($tenantDatabases as $tenantDb) {
+            try {
+                $tenantConnection = $this->getTenantConnection($tenantDb);
+
+                if ($tenantConnection) {
+                    $order = DropshippingOrder::on($tenantConnection)
+                        // Note: Removed relationships to avoid cross-database issues  
+                        // ->with(['localProduct', 'dropshippingProduct', 'submittedBy', 'approvedBy'])
+                        ->find($orderId);
+
+                    if ($order) {
+                        // Store the connection name for later use
+                        $order->connection_name = $tenantConnection;
+                        return $order;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to search for order {$orderId} in tenant database {$tenantDb}: " . $e->getMessage());
+                continue;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -83,7 +149,14 @@ class OrderManagementController extends Controller
             'admin_notes' => 'nullable|string|max:1000',
         ]);
 
-        $order = DropshippingOrder::findOrFail($id);
+        $order = $this->findOrderInTenantDatabases($id);
+
+        if (!$order) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Order not found.']);
+            }
+            return back()->withErrors(['message' => 'Order not found.']);
+        }
 
         if (!$order->canBeApproved()) {
             if ($request->expectsJson()) {
@@ -93,16 +166,19 @@ class OrderManagementController extends Controller
         }
 
         $adminId = Auth::id();
-        $order->approve($adminId, $request->admin_notes);
+
+        // Use the correct tenant connection for the operation
+        $tenantOrder = DropshippingOrder::on($order->connection_name)->find($id);
+        $tenantOrder->approve($adminId, $request->admin_notes);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => "Order {$order->order_number} approved successfully. Tenant balance has been updated."
+                'message' => "Order {$tenantOrder->order_number} approved successfully. Tenant balance has been updated."
             ]);
         }
 
-        return back()->with('success', "Order {$order->order_number} approved successfully. Tenant balance has been updated.");
+        return back()->with('success', "Order {$tenantOrder->order_number} approved successfully. Tenant balance has been updated.");
     }
 
     /**
@@ -115,7 +191,14 @@ class OrderManagementController extends Controller
             'reason' => 'required_without:rejection_reason|string|max:1000', // For AJAX calls
         ]);
 
-        $order = DropshippingOrder::findOrFail($id);
+        $order = $this->findOrderInTenantDatabases($id);
+
+        if (!$order) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Order not found.']);
+            }
+            return back()->withErrors(['message' => 'Order not found.']);
+        }
 
         if ($order->status !== 'pending') {
             if ($request->expectsJson()) {
@@ -126,10 +209,13 @@ class OrderManagementController extends Controller
 
         $adminId = Auth::id();
         $rejectionReason = $request->rejection_reason ?? $request->reason;
-        $order->reject($adminId, $rejectionReason);
+
+        // Use the correct tenant connection for the operation
+        $tenantOrder = DropshippingOrder::on($order->connection_name)->find($id);
+        $tenantOrder->reject($adminId, $rejectionReason);
 
         // Update tenant balance - remove pending earning
-        $balance = TenantBalance::forTenant($order->tenant_id)->first();
+        $balance = TenantBalance::on($order->connection_name)->forTenant($order->tenant_id)->first();
         if ($balance) {
             $balance->decrement('pending_balance', $order->tenant_earning);
             $balance->decrement('pending_orders');
@@ -138,11 +224,11 @@ class OrderManagementController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => "Order {$order->order_number} rejected. Tenant has been notified."
+                'message' => "Order {$tenantOrder->order_number} rejected. Tenant has been notified."
             ]);
         }
 
-        return back()->with('success', "Order {$order->order_number} rejected. Tenant has been notified.");
+        return back()->with('success', "Order {$tenantOrder->order_number} rejected. Tenant has been notified.");
     }
 
     /**
@@ -155,7 +241,11 @@ class OrderManagementController extends Controller
             'admin_notes' => 'nullable|string|max:1000',
         ]);
 
-        $order = DropshippingOrder::findOrFail($id);
+        $order = $this->findOrderInTenantDatabases($id);
+
+        if (!$order) {
+            return back()->withErrors(['message' => 'Order not found.']);
+        }
 
         if (!in_array($order->status, ['approved', 'processing', 'shipped'])) {
             return back()->withErrors(['message' => 'Order status cannot be updated from current state.']);
@@ -173,9 +263,11 @@ class OrderManagementController extends Controller
             $updates['delivered_at'] = now();
         }
 
-        $order->update($updates);
+        // Use the correct tenant connection for the operation
+        $tenantOrder = DropshippingOrder::on($order->connection_name)->find($id);
+        $tenantOrder->update($updates);
 
-        return back()->with('success', "Order {$order->order_number} status updated to {$request->status}.");
+        return back()->with('success', "Order {$tenantOrder->order_number} status updated to {$request->status}.");
     }
 
     /**
@@ -364,5 +456,54 @@ class OrderManagementController extends Controller
             'orders_by_status' => $ordersByStatus,
             'monthly_stats' => $monthlyStats,
         ]);
+    }
+
+    /**
+     * Get all tenant database names
+     */
+    private function getAllTenantDatabases()
+    {
+        try {
+            // Get all tenants from the main database
+            $tenants = DB::connection('mysql')->table('tenants')->get();
+            $databases = [];
+
+            foreach ($tenants as $tenant) {
+                $tenantData = json_decode($tenant->data, true);
+                if (isset($tenantData['tenancy_db_name'])) {
+                    $databases[] = $tenantData['tenancy_db_name'];
+                }
+            }
+
+            return $databases;
+        } catch (\Exception $e) {
+            \Log::error("Failed to get tenant databases: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get connection to a specific tenant database
+     */
+    private function getTenantConnection($databaseName)
+    {
+        try {
+            $connectionName = 'tenant_' . $databaseName;
+
+            // Check if connection already exists
+            if (!array_key_exists($connectionName, config('database.connections'))) {
+                $tenantConfig = config('database.connections.mysql');
+                $tenantConfig['database'] = $databaseName;
+                config(["database.connections.$connectionName" => $tenantConfig]);
+            }
+
+            // Test the connection
+            DB::connection($connectionName)->getPdo();
+
+            return $connectionName;
+        } catch (\Exception $e) {
+            \Log::error("Failed to connect to tenant database {$databaseName}: " . $e->getMessage());
+            return null;
+        }
     }
 }
