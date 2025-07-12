@@ -581,40 +581,99 @@ class OrderManagementController extends Controller
      */
     public function approve(Request $request, $id)
     {
-        $request->validate([
-            'admin_notes' => 'nullable|string|max:1000',
-        ]);
+        try {
+            Log::info("Approve method called for order ID: {$id}");
 
-        $order = $this->findOrderInTenantDatabases($id);
-
-        if (!$order) {
-            if ($request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => 'Order not found.']);
-            }
-            return back()->withErrors(['message' => 'Order not found.']);
-        }
-
-        if (!$order->canBeApproved()) {
-            if ($request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => 'This order cannot be approved.']);
-            }
-            return back()->withErrors(['message' => 'This order cannot be approved.']);
-        }
-
-        $adminId = Auth::id();
-
-        // Use the correct tenant connection for the operation
-        $tenantOrder = DropshippingOrder::on($order->connection_name)->find($id);
-        $tenantOrder->approve($adminId, $request->admin_notes);
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => "Order {$tenantOrder->order_number} approved successfully. Tenant balance has been updated."
+            $request->validate([
+                'admin_notes' => 'nullable|string|max:1000',
             ]);
-        }
 
-        return back()->with('success', "Order {$tenantOrder->order_number} approved successfully. Tenant balance has been updated.");
+            $order = $this->findOrderSimple($id);
+
+            if (!$order) {
+                Log::warning("Order {$id} not found for approval");
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Order not found.']);
+                }
+                return back()->withErrors(['message' => 'Order not found.']);
+            }
+
+            Log::info("Order {$id} found, checking if it can be approved");
+
+            // Convert object to DropshippingOrder model for methods
+            $orderModel = new DropshippingOrder();
+            $orderModel->fill((array) $order);
+            $orderModel->status = $order->status;
+
+            if ($order->status !== 'pending') {
+                Log::warning("Order {$id} cannot be approved. Current status: {$order->status}");
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'This order cannot be approved.']);
+                }
+                return back()->withErrors(['message' => 'This order cannot be approved.']);
+            }
+
+            $adminId = Auth::id();
+            Log::info("Approving order {$id} by admin {$adminId}");
+
+            // Update the order directly using the tenant connection
+            $connectionName = $order->connection_name;
+            $updated = DB::connection($connectionName)->table('dropshipping_orders')
+                ->where('id', $id)
+                ->update([
+                    'status' => 'approved',
+                    'approved_by' => $adminId,
+                    'approved_at' => now(),
+                    'admin_notes' => $request->admin_notes,
+                    'updated_at' => now()
+                ]);
+
+            if ($updated) {
+                Log::info("Order {$id} approved successfully");
+
+                // Update tenant balance
+                try {
+                    $balance = DB::connection($connectionName)->table('tenant_balances')
+                        ->where('tenant_id', $order->tenant_id)
+                        ->first();
+
+                    if ($balance) {
+                        DB::connection($connectionName)->table('tenant_balances')
+                            ->where('tenant_id', $order->tenant_id)
+                            ->update([
+                                'available_balance' => $balance->available_balance + $order->tenant_earning,
+                                'pending_balance' => $balance->pending_balance - $order->tenant_earning,
+                                'approved_orders' => $balance->approved_orders + 1,
+                                'pending_orders' => $balance->pending_orders - 1,
+                                'updated_at' => now()
+                            ]);
+                    }
+                } catch (\Exception $balanceError) {
+                    Log::warning("Failed to update tenant balance for order {$id}: " . $balanceError->getMessage());
+                }
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => "Order {$order->order_number} approved successfully. Tenant balance has been updated."
+                    ]);
+                }
+
+                return back()->with('success', "Order {$order->order_number} approved successfully. Tenant balance has been updated.");
+            } else {
+                Log::error("Failed to update order {$id} in database");
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Failed to approve order.']);
+                }
+                return back()->withErrors(['message' => 'Failed to approve order.']);
+            }
+        } catch (\Exception $e) {
+            Log::error("Error in approve method for order {$id}: " . $e->getMessage());
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Error approving order: ' . $e->getMessage()]);
+            }
+            return back()->withErrors(['message' => 'Error approving order: ' . $e->getMessage()]);
+        }
     }
 
     /**
@@ -622,49 +681,99 @@ class OrderManagementController extends Controller
      */
     public function reject(Request $request, $id)
     {
-        $request->validate([
-            'rejection_reason' => 'required|string|max:1000',
-            'reason' => 'required_without:rejection_reason|string|max:1000', // For AJAX calls
-        ]);
+        try {
+            Log::info("Reject method called for order ID: {$id}");
 
-        $order = $this->findOrderInTenantDatabases($id);
-
-        if (!$order) {
-            if ($request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => 'Order not found.']);
-            }
-            return back()->withErrors(['message' => 'Order not found.']);
-        }
-
-        if ($order->status !== 'pending') {
-            if ($request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => 'Only pending orders can be rejected.']);
-            }
-            return back()->withErrors(['message' => 'Only pending orders can be rejected.']);
-        }
-
-        $adminId = Auth::id();
-        $rejectionReason = $request->rejection_reason ?? $request->reason;
-
-        // Use the correct tenant connection for the operation
-        $tenantOrder = DropshippingOrder::on($order->connection_name)->find($id);
-        $tenantOrder->reject($adminId, $rejectionReason);
-
-        // Update tenant balance - remove pending earning
-        $balance = TenantBalance::on($order->connection_name)->forTenant($order->tenant_id)->first();
-        if ($balance) {
-            $balance->decrement('pending_balance', $order->tenant_earning);
-            $balance->decrement('pending_orders');
-        }
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => "Order {$tenantOrder->order_number} rejected. Tenant has been notified."
+            $request->validate([
+                'rejection_reason' => 'nullable|string|max:1000',
+                'reason' => 'required_without:rejection_reason|string|max:1000', // For AJAX calls
             ]);
-        }
 
-        return back()->with('success', "Order {$tenantOrder->order_number} rejected. Tenant has been notified.");
+            $order = $this->findOrderSimple($id);
+
+            if (!$order) {
+                Log::warning("Order {$id} not found for rejection");
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Order not found.']);
+                }
+                return back()->withErrors(['message' => 'Order not found.']);
+            }
+
+            if ($order->status !== 'pending') {
+                Log::warning("Order {$id} cannot be rejected. Current status: {$order->status}");
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Only pending orders can be rejected.']);
+                }
+                return back()->withErrors(['message' => 'Only pending orders can be rejected.']);
+            }
+
+            $adminId = Auth::id();
+            $rejectionReason = $request->rejection_reason ?? $request->reason;
+
+            if (empty($rejectionReason)) {
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Rejection reason is required.']);
+                }
+                return back()->withErrors(['message' => 'Rejection reason is required.']);
+            }
+
+            Log::info("Rejecting order {$id} by admin {$adminId}");
+
+            // Update the order directly using the tenant connection
+            $connectionName = $order->connection_name;
+            $updated = DB::connection($connectionName)->table('dropshipping_orders')
+                ->where('id', $id)
+                ->update([
+                    'status' => 'rejected',
+                    'approved_by' => $adminId,
+                    'rejection_reason' => $rejectionReason,
+                    'updated_at' => now()
+                ]);
+
+            if ($updated) {
+                Log::info("Order {$id} rejected successfully");
+
+                // Update tenant balance - remove pending earning
+                try {
+                    $balance = DB::connection($connectionName)->table('tenant_balances')
+                        ->where('tenant_id', $order->tenant_id)
+                        ->first();
+
+                    if ($balance) {
+                        DB::connection($connectionName)->table('tenant_balances')
+                            ->where('tenant_id', $order->tenant_id)
+                            ->update([
+                                'pending_balance' => $balance->pending_balance - $order->tenant_earning,
+                                'pending_orders' => $balance->pending_orders - 1,
+                                'updated_at' => now()
+                            ]);
+                    }
+                } catch (\Exception $balanceError) {
+                    Log::warning("Failed to update tenant balance for rejected order {$id}: " . $balanceError->getMessage());
+                }
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => "Order {$order->order_number} rejected. Tenant has been notified."
+                    ]);
+                }
+
+                return back()->with('success', "Order {$order->order_number} rejected. Tenant has been notified.");
+            } else {
+                Log::error("Failed to update order {$id} in database");
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Failed to reject order.']);
+                }
+                return back()->withErrors(['message' => 'Failed to reject order.']);
+            }
+        } catch (\Exception $e) {
+            Log::error("Error in reject method for order {$id}: " . $e->getMessage());
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => 'Error rejecting order: ' . $e->getMessage()]);
+            }
+            return back()->withErrors(['message' => 'Error rejecting order: ' . $e->getMessage()]);
+        }
     }
 
     /**

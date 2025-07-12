@@ -728,7 +728,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content')
                 },
                 body: JSON.stringify({
                     admin_notes: notes
@@ -761,7 +761,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content')
                 },
                 body: JSON.stringify({
                     rejection_reason: reason

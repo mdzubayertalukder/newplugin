@@ -468,10 +468,10 @@ $totalEarnings = $totalAvailableBalance = 0;
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content')
                     },
                     body: JSON.stringify({
-                        notes: ''
+                        admin_notes: ''
                     })
                 })
                 .then(response => response.json())
@@ -495,10 +495,10 @@ $totalEarnings = $totalAvailableBalance = 0;
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content')
                     },
                     body: JSON.stringify({
-                        reason: reason.trim()
+                        rejection_reason: reason.trim()
                     })
                 })
                 .then(response => response.json())
