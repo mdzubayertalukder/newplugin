@@ -198,7 +198,7 @@ Dropshipping Order Details
                                         </tr>
                                         <tr>
                                             <th>{{ translate('ZIP Code') }}</th>
-                                            <td>{{ $order->shipping_info->zip_code ?? 'N/A' }}</td>
+                                            <td>{{ $order->shipping_info->postal_code ?? 'N/A' }}</td>
                                         </tr>
                                     </table>
                                 </div>
@@ -213,9 +213,15 @@ Dropshipping Order Details
                                     <h5>{{ translate('Shipping Address') }}</h5>
                                 </div>
                                 <div class="card-body">
-                                    <p class="text-muted">{{ translate('No shipping information found for this order.') }}</p>
-                                    @if($order->shipping_address)
-                                    <p class="text-info">{{ translate('Shipping address from order:') }} {{ $order->shipping_address }}</p>
+                                    <div class="alert alert-warning">
+                                        <strong>{{ translate('No shipping information found for this order.') }}</strong>
+                                        <p class="mb-0">{{ translate('This may be because the original order does not have a shipping address or the address data is incomplete.') }}</p>
+                                    </div>
+                                    @if(isset($order->shipping_address) && $order->shipping_address)
+                                    <p class="text-info"><strong>{{ translate('Raw shipping address from order:') }}</strong> {{ $order->shipping_address }}</p>
+                                    @endif
+                                    @if(isset($order->original_order) && $order->original_order)
+                                    <p class="text-info"><strong>{{ translate('Original order shipping address ID:') }}</strong> {{ $order->original_order->shipping_address ?? 'Not set' }}</p>
                                     @endif
                                 </div>
                             </div>

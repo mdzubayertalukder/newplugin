@@ -503,6 +503,145 @@ Route::group(['prefix' => getAdminPrefix(), 'as' => 'admin.dropshipping.', 'midd
         }
     })->name('debug.check.orders');
 
+    // DEBUG: Simple order existence check
+    Route::get('/dropshipping/debug/order-exists/{id}', function ($id) {
+        try {
+            $tenants = DB::connection('mysql')->table('tenants')->get();
+
+            foreach ($tenants as $tenant) {
+                $tenantData = json_decode($tenant->data, true);
+                $database = $tenantData['tenancy_db_name'] ?? null;
+
+                if (!$database) continue;
+
+                try {
+                    $connectionName = 'tenant_' . $database;
+                    $tenantConfig = config('database.connections.mysql');
+                    $tenantConfig['database'] = $database;
+                    config(["database.connections.$connectionName" => $tenantConfig]);
+
+                    DB::connection($connectionName)->getPdo();
+
+                    if (!DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                        continue;
+                    }
+
+                    $orderExists = DB::connection($connectionName)->table('dropshipping_orders')
+                        ->where('id', $id)
+                        ->exists();
+
+                    if ($orderExists) {
+                        return response()->json([
+                            'found' => true,
+                            'database' => $database,
+                            'order_id' => $id
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            return response()->json(['found' => false, 'order_id' => $id]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()]);
+        }
+    })->name('debug.order.exists');
+
+    // DEBUG: Test shipping information loading
+    Route::get('/dropshipping/debug/test-order-shipping/{id}', function ($id) {
+        try {
+            $tenants = DB::connection('mysql')->table('tenants')->get();
+
+            foreach ($tenants as $tenant) {
+                $tenantData = json_decode($tenant->data, true);
+                $database = $tenantData['tenancy_db_name'] ?? null;
+
+                if (!$database) continue;
+
+                try {
+                    $connectionName = 'tenant_' . $database;
+                    $tenantConfig = config('database.connections.mysql');
+                    $tenantConfig['database'] = $database;
+                    config(["database.connections.$connectionName" => $tenantConfig]);
+
+                    // Test connection
+                    DB::connection($connectionName)->getPdo();
+
+                    // Check if table exists
+                    if (!DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                        continue;
+                    }
+
+                    // Get the basic order
+                    $order = DB::connection($connectionName)->table('dropshipping_orders')
+                        ->where('id', $id)
+                        ->first();
+
+                    if ($order) {
+                        $debug = [];
+                        $debug['order'] = $order;
+                        $debug['database'] = $database;
+                        $debug['connection'] = $connectionName;
+
+                        // Get original order details if available
+                        if ($order->original_order_id) {
+                            $originalOrder = DB::connection($connectionName)->table('tl_com_orders')
+                                ->where('id', $order->original_order_id)
+                                ->first();
+
+                            $debug['original_order'] = $originalOrder;
+
+                            if ($originalOrder && $originalOrder->shipping_address) {
+                                // Get shipping address with related data
+                                $shippingInfo = DB::connection($connectionName)->table('tl_com_customer_address')
+                                    ->leftJoin('tl_com_countries', 'tl_com_customer_address.country_id', '=', 'tl_com_countries.id')
+                                    ->leftJoin('tl_com_states', 'tl_com_customer_address.state_id', '=', 'tl_com_states.id')
+                                    ->leftJoin('tl_com_cities', 'tl_com_customer_address.city_id', '=', 'tl_com_cities.id')
+                                    ->where('tl_com_customer_address.id', $originalOrder->shipping_address)
+                                    ->select(
+                                        'tl_com_customer_address.*',
+                                        'tl_com_countries.name as country',
+                                        'tl_com_states.name as state',
+                                        'tl_com_cities.name as city'
+                                    )
+                                    ->first();
+
+                                $debug['shipping_info'] = $shippingInfo;
+                            }
+
+                            if ($originalOrder && $originalOrder->billing_address) {
+                                // Get billing address with related data
+                                $billingInfo = DB::connection($connectionName)->table('tl_com_customer_address')
+                                    ->leftJoin('tl_com_countries', 'tl_com_customer_address.country_id', '=', 'tl_com_countries.id')
+                                    ->leftJoin('tl_com_states', 'tl_com_customer_address.state_id', '=', 'tl_com_states.id')
+                                    ->leftJoin('tl_com_cities', 'tl_com_customer_address.city_id', '=', 'tl_com_cities.id')
+                                    ->where('tl_com_customer_address.id', $originalOrder->billing_address)
+                                    ->select(
+                                        'tl_com_customer_address.*',
+                                        'tl_com_countries.name as country',
+                                        'tl_com_states.name as state',
+                                        'tl_com_cities.name as city'
+                                    )
+                                    ->first();
+
+                                $debug['billing_info'] = $billingInfo;
+                            }
+                        }
+
+                        return response()->json($debug, 200, [], JSON_PRETTY_PRINT);
+                    }
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            return response()->json(['error' => "Order {$id} not found in any tenant database."]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()]);
+        }
+    })->name('debug.test.shipping');
+
     // Plan Limits Management
     Route::get('/dropshipping/plan-limits', [WooCommerceConfigController::class, 'planLimits'])->name('plan-limits.index');
     Route::post('/dropshipping/plan-limits', [WooCommerceConfigController::class, 'storePlanLimits'])->name('plan-limits.store');

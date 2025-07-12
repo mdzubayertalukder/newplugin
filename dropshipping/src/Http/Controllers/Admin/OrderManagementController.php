@@ -151,7 +151,7 @@ class OrderManagementController extends Controller
         try {
             Log::info("Attempting to show order with ID: {$id}");
 
-            // Use the working simple approach instead of the complex enhanced method
+            // Use the simple method with enhanced shipping information loading
             $order = $this->findOrderSimple($id);
 
             if (!$order) {
@@ -160,7 +160,7 @@ class OrderManagementController extends Controller
                     ->with('error', "Order {$id} not found in any tenant database.");
             }
 
-            Log::info("Order {$id} found successfully, attempting to load view");
+            Log::info("Order {$id} found successfully in database: " . ($order->tenant_database ?? 'unknown'));
 
             // Add some debug info to the order object
             $order->debug_info = [
@@ -168,8 +168,13 @@ class OrderManagementController extends Controller
                 'connection_name' => $order->connection_name ?? 'unknown',
                 'has_shipping_info' => isset($order->shipping_info),
                 'has_billing_info' => isset($order->billing_info),
-                'has_payment_info' => isset($order->payment_info)
+                'has_payment_info' => isset($order->payment_info),
+                'has_original_order' => isset($order->original_order),
+                'shipping_address_id' => $order->original_order->shipping_address ?? 'not available',
+                'billing_address_id' => $order->original_order->billing_address ?? 'not available'
             ];
+
+            Log::info("Order {$id} debug info: " . json_encode($order->debug_info));
 
             try {
                 return view('plugin/dropshipping::admin.order-management.show', compact('order'));
@@ -283,17 +288,35 @@ class OrderManagementController extends Controller
                                     if ($originalOrder) {
                                         $order->original_order = $originalOrder;
 
-                                        // Get shipping address
+                                        // Get shipping address with related data
                                         if ($originalOrder->shipping_address) {
                                             $order->shipping_info = DB::connection($connectionName)->table('tl_com_customer_address')
-                                                ->where('id', $originalOrder->shipping_address)
+                                                ->leftJoin('tl_countries', 'tl_com_customer_address.country_id', '=', 'tl_countries.id')
+                                                ->leftJoin('tl_com_state', 'tl_com_customer_address.state_id', '=', 'tl_com_state.id')
+                                                ->leftJoin('tl_com_cities', 'tl_com_customer_address.city_id', '=', 'tl_com_cities.id')
+                                                ->where('tl_com_customer_address.id', $originalOrder->shipping_address)
+                                                ->select(
+                                                    'tl_com_customer_address.*',
+                                                    'tl_countries.name as country',
+                                                    'tl_com_state.name as state',
+                                                    'tl_com_cities.name as city'
+                                                )
                                                 ->first();
                                         }
 
-                                        // Get billing address  
+                                        // Get billing address with related data
                                         if ($originalOrder->billing_address) {
                                             $order->billing_info = DB::connection($connectionName)->table('tl_com_customer_address')
-                                                ->where('id', $originalOrder->billing_address)
+                                                ->leftJoin('tl_countries', 'tl_com_customer_address.country_id', '=', 'tl_countries.id')
+                                                ->leftJoin('tl_com_state', 'tl_com_customer_address.state_id', '=', 'tl_com_state.id')
+                                                ->leftJoin('tl_com_cities', 'tl_com_customer_address.city_id', '=', 'tl_com_cities.id')
+                                                ->where('tl_com_customer_address.id', $originalOrder->billing_address)
+                                                ->select(
+                                                    'tl_com_customer_address.*',
+                                                    'tl_countries.name as country',
+                                                    'tl_com_state.name as state',
+                                                    'tl_com_cities.name as city'
+                                                )
                                                 ->first();
                                         }
 
@@ -358,7 +381,9 @@ class OrderManagementController extends Controller
     private function findOrderSimple($id)
     {
         try {
+            Log::info("findOrderSimple: Starting search for order {$id}");
             $tenants = DB::connection('mysql')->table('tenants')->get();
+            Log::info("findOrderSimple: Found " . count($tenants) . " tenants");
 
             foreach ($tenants as $tenant) {
                 $tenantData = json_decode($tenant->data, true);
@@ -367,6 +392,7 @@ class OrderManagementController extends Controller
                 if (!$database) continue;
 
                 try {
+                    Log::info("findOrderSimple: Checking database {$database}");
                     $connectionName = 'tenant_' . $database;
                     $tenantConfig = config('database.connections.mysql');
                     $tenantConfig['database'] = $database;
@@ -377,6 +403,7 @@ class OrderManagementController extends Controller
 
                     // Check if table exists
                     if (!DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                        Log::info("findOrderSimple: dropshipping_orders table not found in {$database}");
                         continue;
                     }
 
@@ -386,6 +413,8 @@ class OrderManagementController extends Controller
                         ->first();
 
                     if ($order) {
+                        Log::info("findOrderSimple: Found order {$id} in database {$database}");
+
                         // Convert to object with additional properties
                         $orderObj = (object) $order;
                         $orderObj->connection_name = $connectionName;
@@ -393,28 +422,54 @@ class OrderManagementController extends Controller
 
                         // Get additional order details if original_order_id exists
                         if ($order->original_order_id) {
+                            Log::info("findOrderSimple: Loading original order {$order->original_order_id}");
+
                             // Get original order details
                             $originalOrder = DB::connection($connectionName)->table('tl_com_orders')
                                 ->where('id', $order->original_order_id)
                                 ->first();
 
                             if ($originalOrder) {
+                                Log::info("findOrderSimple: Found original order, shipping_address: " . ($originalOrder->shipping_address ?? 'null'));
                                 $orderObj->original_order = $originalOrder;
 
-                                // Get shipping address
+                                // Get shipping address with related data
                                 if ($originalOrder->shipping_address) {
+                                    Log::info("findOrderSimple: Loading shipping address {$originalOrder->shipping_address}");
                                     $shippingInfo = DB::connection($connectionName)->table('tl_com_customer_address')
-                                        ->where('id', $originalOrder->shipping_address)
+                                        ->leftJoin('tl_countries', 'tl_com_customer_address.country_id', '=', 'tl_countries.id')
+                                        ->leftJoin('tl_com_state', 'tl_com_customer_address.state_id', '=', 'tl_com_state.id')
+                                        ->leftJoin('tl_com_cities', 'tl_com_customer_address.city_id', '=', 'tl_com_cities.id')
+                                        ->where('tl_com_customer_address.id', $originalOrder->shipping_address)
+                                        ->select(
+                                            'tl_com_customer_address.*',
+                                            'tl_countries.name as country',
+                                            'tl_com_state.name as state',
+                                            'tl_com_cities.name as city'
+                                        )
                                         ->first();
                                     if ($shippingInfo) {
+                                        Log::info("findOrderSimple: Loaded shipping info - City: " . ($shippingInfo->city ?? 'null') . ", State: " . ($shippingInfo->state ?? 'null') . ", Country: " . ($shippingInfo->country ?? 'null'));
                                         $orderObj->shipping_info = $shippingInfo;
+                                    } else {
+                                        Log::warning("findOrderSimple: No shipping info found for address ID {$originalOrder->shipping_address}");
                                     }
                                 }
 
-                                // Get billing address  
+                                // Get billing address with related data
                                 if ($originalOrder->billing_address) {
+                                    Log::info("findOrderSimple: Loading billing address {$originalOrder->billing_address}");
                                     $billingInfo = DB::connection($connectionName)->table('tl_com_customer_address')
-                                        ->where('id', $originalOrder->billing_address)
+                                        ->leftJoin('tl_countries', 'tl_com_customer_address.country_id', '=', 'tl_countries.id')
+                                        ->leftJoin('tl_com_state', 'tl_com_customer_address.state_id', '=', 'tl_com_state.id')
+                                        ->leftJoin('tl_com_cities', 'tl_com_customer_address.city_id', '=', 'tl_com_cities.id')
+                                        ->where('tl_com_customer_address.id', $originalOrder->billing_address)
+                                        ->select(
+                                            'tl_com_customer_address.*',
+                                            'tl_countries.name as country',
+                                            'tl_com_state.name as state',
+                                            'tl_com_cities.name as city'
+                                        )
                                         ->first();
                                     if ($billingInfo) {
                                         $orderObj->billing_info = $billingInfo;
@@ -446,7 +501,11 @@ class OrderManagementController extends Controller
                                 if ($orderProducts) {
                                     $orderObj->order_products = $orderProducts;
                                 }
+                            } else {
+                                Log::warning("findOrderSimple: Original order {$order->original_order_id} not found");
                             }
+                        } else {
+                            Log::info("findOrderSimple: No original_order_id for order {$id}");
                         }
 
                         return $orderObj;
@@ -457,6 +516,7 @@ class OrderManagementController extends Controller
                 }
             }
 
+            Log::warning("findOrderSimple: Order {$id} not found in any tenant database");
             return null;
         } catch (\Exception $e) {
             Log::error("Error in findOrderSimple: " . $e->getMessage());
