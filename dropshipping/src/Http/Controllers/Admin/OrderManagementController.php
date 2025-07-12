@@ -18,27 +18,41 @@ class OrderManagementController extends Controller
      */
     public function index(Request $request)
     {
-        // Get all tenant databases to aggregate orders from
-        $allOrders = collect();
-        $tenantDatabases = $this->getAllTenantDatabases();
+        try {
+            // Initialize collections for aggregating data
+            $allOrders = collect();
+            $tenantDatabases = $this->getAllTenantDatabases();
+            $connectionErrors = [];
 
-        foreach ($tenantDatabases as $tenantDb) {
-            try {
-                // Connect to each tenant database
-                $tenantConnection = $this->getTenantConnection($tenantDb);
+            // Add debug info
+            Log::info("OrderManagementController: Found " . count($tenantDatabases) . " tenant databases");
 
-                if ($tenantConnection) {
-                    $query = DropshippingOrder::on($tenantConnection);
-                    // Note: Removed relationships to avoid cross-database issues
-                    // ->with(['localProduct', 'dropshippingProduct', 'submittedBy', 'approvedBy']);
+            foreach ($tenantDatabases as $tenantDb) {
+                try {
+                    // Get tenant connection
+                    $connectionName = $this->getTenantConnection($tenantDb);
+
+                    if (!$connectionName) {
+                        $connectionErrors[] = "Failed to connect to {$tenantDb}";
+                        continue;
+                    }
+
+                    // Check if dropshipping_orders table exists, create if not
+                    if (!DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                        Log::info("Creating dropshipping_orders table in {$tenantDb}");
+                        $this->createDropshippingOrdersTable($connectionName);
+                    }
+
+                    // Query orders from this tenant database
+                    $query = DropshippingOrder::on($connectionName);
 
                     // Apply filters
                     if ($request->filled('status') && $request->status !== 'all') {
-                        $query->byStatus($request->status);
+                        $query->where('status', $request->status);
                     }
 
                     if ($request->filled('tenant_id')) {
-                        $query->forTenant($request->tenant_id);
+                        $query->where('tenant_id', $request->tenant_id);
                     }
 
                     if ($request->filled('search')) {
@@ -50,48 +64,83 @@ class OrderManagementController extends Controller
                         });
                     }
 
-                    $orders = $query->get();
+                    $orders = $query->orderBy('created_at', 'desc')->get();
+
+                    // Add tenant database info to each order
+                    foreach ($orders as $order) {
+                        $order->tenant_database = $tenantDb;
+                        $order->connection_name = $connectionName;
+                    }
+
                     $allOrders = $allOrders->merge($orders);
+
+                    Log::info("Found " . $orders->count() . " orders in {$tenantDb}");
+                } catch (\Exception $e) {
+                    Log::error("Error querying tenant database {$tenantDb}: " . $e->getMessage());
+                    $connectionErrors[] = "Error in {$tenantDb}: " . $e->getMessage();
+                    continue;
                 }
-            } catch (\Exception $e) {
-                // Log error and continue with other tenant databases
-                \Log::error("Failed to query tenant database {$tenantDb}: " . $e->getMessage());
-                continue;
             }
+
+            Log::info("Total orders found: " . $allOrders->count());
+
+            // Sort all orders by created_at descending
+            $allOrders = $allOrders->sortByDesc('created_at');
+
+            // Manual pagination
+            $page = $request->get('page', 1);
+            $perPage = 20;
+            $offset = ($page - 1) * $perPage;
+            $paginatedOrders = $allOrders->slice($offset, $perPage)->values();
+
+            // Create paginator
+            $orders = new LengthAwarePaginator(
+                $paginatedOrders,
+                $allOrders->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()]
+            );
+
+            // Calculate statistics
+            $stats = [
+                'total_orders' => $allOrders->count(),
+                'pending_orders' => $allOrders->where('status', 'pending')->count(),
+                'approved_orders' => $allOrders->where('status', 'approved')->count(),
+                'rejected_orders' => $allOrders->where('status', 'rejected')->count(),
+                'shipped_orders' => $allOrders->where('status', 'shipped')->count(),
+                'delivered_orders' => $allOrders->where('status', 'delivered')->count(),
+            ];
+
+            // Get unique tenants for filter
+            $tenants = $allOrders->pluck('tenant_id')->unique()->sort()->values();
+
+            // If no orders found, show debug info
+            if ($allOrders->isEmpty()) {
+                Log::warning("No orders found. Connection errors: " . implode(', ', $connectionErrors));
+                // You can uncomment the line below to show debug info in the view
+                // session()->flash('debug_info', 'No orders found. Checked ' . count($tenantDatabases) . ' databases. Errors: ' . implode(', ', $connectionErrors));
+            }
+
+            return view('plugin/dropshipping::admin.order-management.index', compact('orders', 'stats', 'tenants'));
+        } catch (\Exception $e) {
+            Log::error("Error in OrderManagementController index: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+            // Return empty data to prevent page crash
+            $orders = new LengthAwarePaginator([], 0, 20, 1, ['path' => $request->url()]);
+            $stats = [
+                'total_orders' => 0,
+                'pending_orders' => 0,
+                'approved_orders' => 0,
+                'rejected_orders' => 0,
+                'shipped_orders' => 0,
+                'delivered_orders' => 0,
+            ];
+            $tenants = collect();
+
+            session()->flash('error', 'Error loading orders: ' . $e->getMessage());
+            return view('plugin/dropshipping::admin.order-management.index', compact('orders', 'stats', 'tenants'));
         }
-
-        // Sort all orders by created_at descending
-        $allOrders = $allOrders->sortByDesc('created_at');
-
-        // Paginate manually
-        $page = $request->get('page', 1);
-        $perPage = 20;
-        $offset = ($page - 1) * $perPage;
-        $paginatedOrders = $allOrders->slice($offset, $perPage);
-
-        // Create a paginator
-        $orders = new \Illuminate\Pagination\LengthAwarePaginator(
-            $paginatedOrders,
-            $allOrders->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
-        // Get statistics from all tenant databases
-        $stats = [
-            'total_orders' => $allOrders->count(),
-            'pending_orders' => $allOrders->where('status', 'pending')->count(),
-            'approved_orders' => $allOrders->where('status', 'approved')->count(),
-            'rejected_orders' => $allOrders->where('status', 'rejected')->count(),
-            'shipped_orders' => $allOrders->where('status', 'shipped')->count(),
-            'delivered_orders' => $allOrders->where('status', 'delivered')->count(),
-        ];
-
-        // Get unique tenants for filter
-        $tenants = $allOrders->pluck('tenant_id')->unique()->sort();
-
-        return view('plugin/dropshipping::admin.order-management.index', compact('orders', 'stats', 'tenants'));
     }
 
     /**
@@ -99,26 +148,223 @@ class OrderManagementController extends Controller
      */
     public function show($id)
     {
-        $order = $this->findOrderInTenantDatabasesEnhanced($id);
+        try {
+            Log::info("Attempting to show order with ID: {$id}");
 
-        if (!$order) {
-            return back()->withErrors(['message' => "Order {$id} not found in any tenant database."]);
+            // Use the working simple approach instead of the complex enhanced method
+            $order = $this->findOrderSimple($id);
+
+            if (!$order) {
+                Log::warning("Order {$id} not found in any tenant database");
+                return redirect()->route('admin.dropshipping.orders.index')
+                    ->with('error', "Order {$id} not found in any tenant database.");
+            }
+
+            Log::info("Order {$id} found successfully, attempting to load view");
+
+            // Add some debug info to the order object
+            $order->debug_info = [
+                'found_in_database' => $order->tenant_database ?? 'unknown',
+                'connection_name' => $order->connection_name ?? 'unknown',
+                'has_shipping_info' => isset($order->shipping_info),
+                'has_billing_info' => isset($order->billing_info),
+                'has_payment_info' => isset($order->payment_info)
+            ];
+
+            try {
+                return view('plugin/dropshipping::admin.order-management.show', compact('order'));
+            } catch (\Exception $viewException) {
+                Log::error("Error loading view for order {$id}: " . $viewException->getMessage());
+
+                // Return a simple debug view instead
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Order found but view failed to load',
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'customer_name' => $order->customer_name,
+                    'status' => $order->status,
+                    'debug_info' => $order->debug_info,
+                    'view_error' => $viewException->getMessage()
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error("Error in show method for order {$id}: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+
+            return redirect()->route('admin.dropshipping.orders.index')
+                ->with('error', "Error loading order details: " . $e->getMessage());
         }
-
-        return view('plugin/dropshipping::admin.order-management.show', compact('order'));
     }
 
     /**
-     * Find order with enhanced information (shipping, billing, payment)
+     * Find order with enhanced information (shipping, billing, payment) - made public for debugging
      */
-    private function findOrderInTenantDatabasesEnhanced($orderId)
+    public function findOrderInTenantDatabasesEnhanced($orderId)
     {
-        $tenants = DB::connection('mysql')->table('tenants')->get();
+        try {
+            $tenants = DB::connection('mysql')->table('tenants')->get();
+            Log::info("Searching for order {$orderId} across " . $tenants->count() . " tenant databases");
 
-        foreach ($tenants as $tenant) {
-            $tenantData = json_decode($tenant->data, true);
-            if (isset($tenantData['tenancy_db_name'])) {
-                $database = $tenantData['tenancy_db_name'];
+            $searchedDatabases = [];
+            $connectionErrors = [];
+
+            foreach ($tenants as $tenant) {
+                $tenantData = json_decode($tenant->data, true);
+                if (isset($tenantData['tenancy_db_name'])) {
+                    $database = $tenantData['tenancy_db_name'];
+                    $searchedDatabases[] = $database;
+                    Log::debug("Checking tenant database: {$database}");
+
+                    try {
+                        $connectionName = 'tenant_' . $database;
+                        $tenantConfig = config('database.connections.mysql');
+                        $tenantConfig['database'] = $database;
+                        config(["database.connections.$connectionName" => $tenantConfig]);
+
+                        // Test connection
+                        DB::connection($connectionName)->getPdo();
+                        Log::debug("Successfully connected to {$database}");
+
+                        // Check if table exists
+                        if (!DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                            Log::debug("dropshipping_orders table does not exist in {$database}");
+                            $connectionErrors[] = "{$database}: table does not exist";
+                            continue;
+                        }
+
+                        Log::debug("dropshipping_orders table exists in {$database}, searching for order {$orderId}");
+
+                        // First check if order exists with raw query for debugging
+                        $orderCount = DB::connection($connectionName)->table('dropshipping_orders')
+                            ->where('id', $orderId)
+                            ->count();
+
+                        Log::debug("Found {$orderCount} orders with ID {$orderId} in {$database}");
+
+                        if ($orderCount > 0) {
+                            // Get the order using raw query first
+                            $rawOrder = DB::connection($connectionName)->table('dropshipping_orders')
+                                ->where('id', $orderId)
+                                ->first();
+
+                            Log::debug("Raw order data: " . json_encode($rawOrder));
+
+                            // Now try with Eloquent
+                            $order = DropshippingOrder::on($connectionName)->find($orderId);
+
+                            if ($order) {
+                                Log::info("Found order {$orderId} in database {$database}");
+
+                                // Store connection info
+                                $order->connection_name = $connectionName;
+                                $order->tenant_database = $database;
+
+                                // Load user information from main database
+                                if ($order->submitted_by) {
+                                    $order->submitted_user = DB::connection('mysql')->table('users')
+                                        ->where('id', $order->submitted_by)
+                                        ->first();
+                                }
+
+                                if ($order->approved_by) {
+                                    $order->approved_user = DB::connection('mysql')->table('users')
+                                        ->where('id', $order->approved_by)
+                                        ->first();
+                                }
+
+                                // Get original order details for shipping, billing, payment info
+                                if ($order->original_order_id) {
+                                    Log::debug("Loading original order details for order {$orderId}");
+
+                                    $originalOrder = DB::connection($connectionName)->table('tl_com_orders')
+                                        ->where('id', $order->original_order_id)
+                                        ->first();
+
+                                    if ($originalOrder) {
+                                        $order->original_order = $originalOrder;
+
+                                        // Get shipping address
+                                        if ($originalOrder->shipping_address) {
+                                            $order->shipping_info = DB::connection($connectionName)->table('tl_com_customer_address')
+                                                ->where('id', $originalOrder->shipping_address)
+                                                ->first();
+                                        }
+
+                                        // Get billing address  
+                                        if ($originalOrder->billing_address) {
+                                            $order->billing_info = DB::connection($connectionName)->table('tl_com_customer_address')
+                                                ->where('id', $originalOrder->billing_address)
+                                                ->first();
+                                        }
+
+                                        // Get payment method
+                                        if ($originalOrder->payment_method) {
+                                            $order->payment_info = DB::connection($connectionName)->table('tl_com_payment_methods')
+                                                ->where('id', $originalOrder->payment_method)
+                                                ->first();
+                                        }
+
+                                        // Get customer info (regular or guest)
+                                        if ($originalOrder->customer_id) {
+                                            $order->customer_info = DB::connection($connectionName)->table('tl_com_customers')
+                                                ->where('id', $originalOrder->customer_id)
+                                                ->first();
+                                        } else {
+                                            // Check for guest customer
+                                            $order->guest_customer_info = DB::connection($connectionName)->table('tl_com_guest_customer')
+                                                ->where('order_id', $originalOrder->id)
+                                                ->first();
+                                        }
+
+                                        // Get order products for detailed info
+                                        $order->order_products = DB::connection($connectionName)->table('tl_com_ordered_products')
+                                            ->where('order_id', $originalOrder->id)
+                                            ->get();
+
+                                        Log::info("Successfully loaded enhanced order information for order {$orderId}");
+                                    }
+                                }
+
+                                return $order;
+                            } else {
+                                Log::warning("Raw query found order but Eloquent didn't find order {$orderId} in {$database}");
+                                $connectionErrors[] = "{$database}: found with raw query but not with Eloquent";
+                            }
+                        } else {
+                            Log::debug("No order with ID {$orderId} found in {$database}");
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning("Error accessing tenant database {$database}: " . $e->getMessage());
+                        $connectionErrors[] = "{$database}: " . $e->getMessage();
+                        continue;
+                    }
+                }
+            }
+
+            Log::warning("Order {$orderId} not found in any tenant database");
+            Log::info("Searched databases: " . implode(', ', $searchedDatabases));
+            Log::info("Connection errors: " . implode(', ', $connectionErrors));
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error in findOrderInTenantDatabasesEnhanced: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return null;
+        }
+    }
+
+    /**
+     * Simple order finding method that works (same as the successful simple route)
+     */
+    private function findOrderSimple($id)
+    {
+        try {
+            $tenants = DB::connection('mysql')->table('tenants')->get();
+
+            foreach ($tenants as $tenant) {
+                $tenantData = json_decode($tenant->data, true);
+                $database = $tenantData['tenancy_db_name'] ?? null;
+
+                if (!$database) continue;
 
                 try {
                     $connectionName = 'tenant_' . $database;
@@ -126,88 +372,96 @@ class OrderManagementController extends Controller
                     $tenantConfig['database'] = $database;
                     config(["database.connections.$connectionName" => $tenantConfig]);
 
+                    // Test connection
                     DB::connection($connectionName)->getPdo();
 
-                    if (DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
-                        $order = DropshippingOrder::on($connectionName)->find($orderId);
+                    // Check if table exists
+                    if (!DB::connection($connectionName)->getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                        continue;
+                    }
 
-                        if ($order) {
-                            // Store connection info
-                            $order->connection_name = $connectionName;
-                            $order->tenant_database = $database;
+                    // Get the basic order
+                    $order = DB::connection($connectionName)->table('dropshipping_orders')
+                        ->where('id', $id)
+                        ->first();
 
-                            // Load user information from main database
-                            if ($order->submitted_by) {
-                                $order->submitted_user = DB::connection('mysql')->table('users')
-                                    ->where('id', $order->submitted_by)
-                                    ->first();
-                            }
+                    if ($order) {
+                        // Convert to object with additional properties
+                        $orderObj = (object) $order;
+                        $orderObj->connection_name = $connectionName;
+                        $orderObj->tenant_database = $database;
 
-                            if ($order->approved_by) {
-                                $order->approved_user = DB::connection('mysql')->table('users')
-                                    ->where('id', $order->approved_by)
-                                    ->first();
-                            }
+                        // Get additional order details if original_order_id exists
+                        if ($order->original_order_id) {
+                            // Get original order details
+                            $originalOrder = DB::connection($connectionName)->table('tl_com_orders')
+                                ->where('id', $order->original_order_id)
+                                ->first();
 
-                            // Get original order details for shipping, billing, payment info
-                            if ($order->original_order_id) {
-                                $originalOrder = DB::connection($connectionName)->table('tl_com_orders')
-                                    ->where('id', $order->original_order_id)
-                                    ->first();
+                            if ($originalOrder) {
+                                $orderObj->original_order = $originalOrder;
 
-                                if ($originalOrder) {
-                                    $order->original_order = $originalOrder;
-
-                                    // Get shipping address
-                                    if ($originalOrder->shipping_address) {
-                                        $order->shipping_info = DB::connection($connectionName)->table('tl_com_customer_addresses')
-                                            ->where('id', $originalOrder->shipping_address)
-                                            ->first();
+                                // Get shipping address
+                                if ($originalOrder->shipping_address) {
+                                    $shippingInfo = DB::connection($connectionName)->table('tl_com_customer_address')
+                                        ->where('id', $originalOrder->shipping_address)
+                                        ->first();
+                                    if ($shippingInfo) {
+                                        $orderObj->shipping_info = $shippingInfo;
                                     }
+                                }
 
-                                    // Get billing address
-                                    if ($originalOrder->billing_address) {
-                                        $order->billing_info = DB::connection($connectionName)->table('tl_com_customer_addresses')
-                                            ->where('id', $originalOrder->billing_address)
-                                            ->first();
+                                // Get billing address  
+                                if ($originalOrder->billing_address) {
+                                    $billingInfo = DB::connection($connectionName)->table('tl_com_customer_address')
+                                        ->where('id', $originalOrder->billing_address)
+                                        ->first();
+                                    if ($billingInfo) {
+                                        $orderObj->billing_info = $billingInfo;
                                     }
+                                }
 
-                                    // Get payment method
-                                    if ($originalOrder->payment_method) {
-                                        $order->payment_info = DB::connection($connectionName)->table('tl_com_payment_methods')
-                                            ->where('id', $originalOrder->payment_method)
-                                            ->first();
+                                // Get customer info
+                                if ($originalOrder->customer_id) {
+                                    $customerInfo = DB::connection($connectionName)->table('tl_com_customers')
+                                        ->where('id', $originalOrder->customer_id)
+                                        ->first();
+                                    if ($customerInfo) {
+                                        $orderObj->customer_info = $customerInfo;
                                     }
-
-                                    // Get customer info (regular or guest)
-                                    if ($originalOrder->customer_id) {
-                                        $order->customer_info = DB::connection($connectionName)->table('tl_com_customers')
-                                            ->where('id', $originalOrder->customer_id)
-                                            ->first();
-                                    } else {
-                                        // Check for guest customer
-                                        $order->guest_customer_info = DB::connection($connectionName)->table('tl_com_guest_customers')
-                                            ->where('order_id', $originalOrder->id)
-                                            ->first();
-                                    }
-
-                                    // Get order products for detailed info
-                                    $order->order_products = DB::connection($connectionName)->table('tl_com_ordered_products')
+                                } else {
+                                    // Check for guest customer
+                                    $guestCustomer = DB::connection($connectionName)->table('tl_com_guest_customer')
                                         ->where('order_id', $originalOrder->id)
-                                        ->get();
+                                        ->first();
+                                    if ($guestCustomer) {
+                                        $orderObj->guest_customer_info = $guestCustomer;
+                                    }
+                                }
+
+                                // Get order products
+                                $orderProducts = DB::connection($connectionName)->table('tl_com_ordered_products')
+                                    ->where('order_id', $originalOrder->id)
+                                    ->get();
+                                if ($orderProducts) {
+                                    $orderObj->order_products = $orderProducts;
                                 }
                             }
-
-                            return $order;
                         }
+
+                        return $orderObj;
                     }
                 } catch (\Exception $e) {
+                    Log::warning("Error accessing tenant database {$database}: " . $e->getMessage());
                     continue;
                 }
             }
-        }
 
-        return null;
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error in findOrderSimple: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -599,7 +853,7 @@ class OrderManagementController extends Controller
 
             return $databases;
         } catch (\Exception $e) {
-            \Log::error("Failed to get tenant databases: " . $e->getMessage());
+            Log::error("Failed to get tenant databases: " . $e->getMessage());
             return [];
         }
     }
@@ -624,8 +878,63 @@ class OrderManagementController extends Controller
 
             return $connectionName;
         } catch (\Exception $e) {
-            \Log::error("Failed to connect to tenant database {$databaseName}: " . $e->getMessage());
+            Log::error("Failed to connect to tenant database {$databaseName}: " . $e->getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Create dropshipping_orders table in tenant database
+     */
+    private function createDropshippingOrdersTable($connectionName)
+    {
+        try {
+            DB::connection($connectionName)->statement("
+                CREATE TABLE IF NOT EXISTS `dropshipping_orders` (
+                    `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                    `tenant_id` varchar(255) NOT NULL,
+                    `order_number` varchar(255) NOT NULL,
+                    `original_order_id` bigint(20) UNSIGNED NULL,
+                    `order_code` varchar(255) NULL,
+                    `local_product_id` bigint(20) UNSIGNED NULL,
+                    `dropshipping_product_id` bigint(20) UNSIGNED NULL,
+                    `product_name` varchar(255) NOT NULL,
+                    `product_sku` varchar(255) NULL,
+                    `quantity` int(11) NOT NULL,
+                    `unit_price` decimal(10,2) NOT NULL,
+                    `total_amount` decimal(10,2) NOT NULL,
+                    `commission_rate` decimal(5,2) NOT NULL DEFAULT 20.00,
+                    `commission_amount` decimal(10,2) NOT NULL,
+                    `tenant_earning` decimal(10,2) NOT NULL,
+                    `customer_name` varchar(255) NOT NULL,
+                    `customer_email` varchar(255) NULL,
+                    `customer_phone` varchar(255) NULL,
+                    `shipping_address` text NULL,
+                    `fulfillment_note` text NULL,
+                    `status` enum('pending','approved','rejected','processing','shipped','delivered','cancelled') NOT NULL DEFAULT 'pending',
+                    `admin_notes` text NULL,
+                    `rejection_reason` text NULL,
+                    `submitted_at` timestamp NULL DEFAULT NULL,
+                    `approved_at` timestamp NULL DEFAULT NULL,
+                    `shipped_at` timestamp NULL DEFAULT NULL,
+                    `delivered_at` timestamp NULL DEFAULT NULL,
+                    `submitted_by` bigint(20) UNSIGNED NOT NULL,
+                    `approved_by` bigint(20) UNSIGNED NULL,
+                    `created_at` timestamp NULL DEFAULT NULL,
+                    `updated_at` timestamp NULL DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `dropshipping_orders_tenant_id_status_index` (`tenant_id`, `status`),
+                    KEY `dropshipping_orders_status_index` (`status`),
+                    KEY `dropshipping_orders_created_at_index` (`created_at`),
+                    KEY `dropshipping_orders_order_number_index` (`order_number`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            Log::info("Successfully created dropshipping_orders table on connection {$connectionName}");
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Failed to create dropshipping_orders table on connection {$connectionName}: " . $e->getMessage());
+            return false;
         }
     }
 }
