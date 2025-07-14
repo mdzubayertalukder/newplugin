@@ -31,8 +31,13 @@ class WithdrawalController extends Controller
      */
     public function index(Request $request)
     {
+        // Explicitly force central database connection for admin operations
+        $centralConnection = config('tenancy.database.central_connection', 'mysql');
+        Config::set('database.default', $centralConnection);
+        DB::setDefaultConnection($centralConnection);
+
         // Remove eager loading of user relationships to avoid tenant database issues
-        $query = WithdrawalRequest::query();
+        $query = WithdrawalRequest::on($centralConnection);
 
         // Filter by status
         if ($request->filled('status') && $request->status !== 'all') {
@@ -78,19 +83,19 @@ class WithdrawalController extends Controller
             }
         }
 
-        // Get statistics
+        // Get statistics using explicit connection
         $stats = [
-            'total_requests' => WithdrawalRequest::count(),
-            'pending_requests' => WithdrawalRequest::byStatus('pending')->count(),
-            'approved_requests' => WithdrawalRequest::byStatus('approved')->count(),
-            'rejected_requests' => WithdrawalRequest::byStatus('rejected')->count(),
-            'processed_requests' => WithdrawalRequest::byStatus('processed')->count(),
-            'total_amount' => WithdrawalRequest::byStatus('processed')->sum('amount'),
-            'pending_amount' => WithdrawalRequest::byStatus('pending')->sum('amount'),
+            'total_requests' => WithdrawalRequest::on($centralConnection)->count(),
+            'pending_requests' => WithdrawalRequest::on($centralConnection)->byStatus('pending')->count(),
+            'approved_requests' => WithdrawalRequest::on($centralConnection)->byStatus('approved')->count(),
+            'rejected_requests' => WithdrawalRequest::on($centralConnection)->byStatus('rejected')->count(),
+            'processed_requests' => WithdrawalRequest::on($centralConnection)->byStatus('processed')->count(),
+            'total_amount' => WithdrawalRequest::on($centralConnection)->byStatus('processed')->sum('amount'),
+            'pending_amount' => WithdrawalRequest::on($centralConnection)->byStatus('pending')->sum('amount'),
         ];
 
-        // Get unique tenants for filter
-        $tenants = WithdrawalRequest::select('tenant_id')
+        // Get unique tenants for filter using explicit connection
+        $tenants = WithdrawalRequest::on($centralConnection)->select('tenant_id')
             ->distinct()
             ->get()
             ->pluck('tenant_id');
