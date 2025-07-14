@@ -216,6 +216,23 @@ CREATE TABLE IF NOT EXISTS `dropshipping_settings` (
     UNIQUE KEY `dropshipping_settings_key_unique` (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Withdrawal Settings Table
+CREATE TABLE IF NOT EXISTS `withdrawal_settings` (
+    `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `minimum_withdrawal_amount` decimal(10,2) NOT NULL DEFAULT 50.00,
+    `maximum_withdrawal_amount` decimal(10,2) NULL,
+    `withdrawal_fee_percentage` decimal(5,2) NOT NULL DEFAULT 0,
+    `withdrawal_fee_fixed` decimal(10,2) NOT NULL DEFAULT 0,
+    `withdrawal_processing_days` int(11) NOT NULL DEFAULT 3,
+    `auto_approve_withdrawals` tinyint(1) NOT NULL DEFAULT 0,
+    `withdrawal_terms` text NULL,
+    `bank_requirements` text NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT 1,
+    `created_at` timestamp NULL DEFAULT NULL,
+    `updated_at` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Insert default settings
 INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description`) VALUES
 ('auto_sync_interval', '24', 'integer', 'Auto sync interval in hours'),
@@ -226,6 +243,10 @@ INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description
 ('max_sync_products_per_batch', '50', 'integer', 'Maximum products to sync per batch'),
 ('notification_email', '', 'string', 'Email for import notifications'),
 ('enable_import_notifications', '1', 'boolean', 'Send notifications for import activities');
+
+-- Insert default withdrawal settings
+INSERT IGNORE INTO `withdrawal_settings` (`minimum_withdrawal_amount`, `maximum_withdrawal_amount`, `withdrawal_fee_percentage`, `withdrawal_fee_fixed`, `withdrawal_processing_days`, `auto_approve_withdrawals`, `withdrawal_terms`, `bank_requirements`, `is_active`, `created_at`, `updated_at`) VALUES
+(50.00, NULL, 0, 0, 3, 0, NULL, NULL, 1, NOW(), NOW());
 
 -- Note: Plan limits will be set when the plugin is activated for specific packages
 -- This avoids referencing main database tables during tenant database creation
