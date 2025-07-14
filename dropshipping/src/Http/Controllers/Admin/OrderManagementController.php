@@ -382,6 +382,24 @@ class OrderManagementController extends Controller
     {
         try {
             Log::info("findOrderSimple: Starting search for order {$id}");
+
+            // First, check the main database
+            try {
+                if (DB::getSchemaBuilder()->hasTable('dropshipping_orders')) {
+                    $order = DB::table('dropshipping_orders')->where('id', $id)->first();
+
+                    if ($order) {
+                        Log::info("findOrderSimple: Found order {$id} in main database");
+                        $orderObj = (object) $order;
+                        $orderObj->connection_name = 'mysql'; // Main connection
+                        return $orderObj;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("Error checking main database: " . $e->getMessage());
+            }
+
+            // If not found in main database, check tenant databases
             $tenants = DB::connection('mysql')->table('tenants')->get();
             Log::info("findOrderSimple: Found " . count($tenants) . " tenants");
 
@@ -616,9 +634,13 @@ class OrderManagementController extends Controller
             $adminId = Auth::id();
             Log::info("Approving order {$id} by admin {$adminId}");
 
-            // Update the order directly using the tenant connection
+            // Update the order directly using the appropriate connection
             $connectionName = $order->connection_name;
-            $updated = DB::connection($connectionName)->table('dropshipping_orders')
+
+            // Use the appropriate database connection
+            $dbConnection = ($connectionName === 'mysql') ? DB::connection() : DB::connection($connectionName);
+
+            $updated = $dbConnection->table('dropshipping_orders')
                 ->where('id', $id)
                 ->update([
                     'status' => 'approved',
@@ -633,20 +655,34 @@ class OrderManagementController extends Controller
 
                 // Update tenant balance
                 try {
-                    $balance = DB::connection($connectionName)->table('tenant_balances')
+                    $balance = $dbConnection->table('tenant_balances')
                         ->where('tenant_id', $order->tenant_id)
                         ->first();
 
                     if ($balance) {
-                        DB::connection($connectionName)->table('tenant_balances')
+                        $dbConnection->table('tenant_balances')
                             ->where('tenant_id', $order->tenant_id)
                             ->update([
                                 'available_balance' => $balance->available_balance + $order->tenant_earning,
-                                'pending_balance' => $balance->pending_balance - $order->tenant_earning,
+                                'pending_balance' => max(0, $balance->pending_balance - $order->tenant_earning),
                                 'approved_orders' => $balance->approved_orders + 1,
-                                'pending_orders' => $balance->pending_orders - 1,
+                                'pending_orders' => max(0, $balance->pending_orders - 1),
                                 'updated_at' => now()
                             ]);
+                    } else {
+                        // Create tenant balance if it doesn't exist
+                        $dbConnection->table('tenant_balances')->insert([
+                            'tenant_id' => $order->tenant_id,
+                            'total_earnings' => $order->tenant_earning,
+                            'available_balance' => $order->tenant_earning,
+                            'pending_balance' => 0,
+                            'total_withdrawn' => 0,
+                            'total_orders' => 1,
+                            'pending_orders' => 0,
+                            'approved_orders' => 1,
+                            'created_at' => now(),
+                            'updated_at' => now()
+                        ]);
                     }
                 } catch (\Exception $balanceError) {
                     Log::warning("Failed to update tenant balance for order {$id}: " . $balanceError->getMessage());

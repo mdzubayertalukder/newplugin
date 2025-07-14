@@ -5,6 +5,7 @@ namespace Plugin\Dropshipping\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Plugin\Dropshipping\Models\TenantBalance;
 use Plugin\Dropshipping\Models\WithdrawalRequest;
 use Plugin\Dropshipping\Models\WithdrawalSetting;
@@ -66,6 +67,13 @@ class WithdrawalController extends Controller
      */
     public function store(Request $request)
     {
+        // Debug logging
+        \Illuminate\Support\Facades\Log::info('Withdrawal store method called', [
+            'request_data' => $request->all(),
+            'payment_method' => $request->payment_method,
+            'amount' => $request->amount
+        ]);
+
         // Basic validation
         $rules = [
             'amount' => 'required|numeric|min:1',
