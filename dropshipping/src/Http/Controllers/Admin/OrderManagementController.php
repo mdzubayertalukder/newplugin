@@ -653,25 +653,27 @@ class OrderManagementController extends Controller
             if ($updated) {
                 Log::info("Order {$id} approved successfully");
 
-                // Update tenant balance
+                // Update tenant balance (always use central database)
                 try {
-                    $balance = $dbConnection->table('tenant_balances')
+                    $centralConnection = config('tenancy.database.central_connection', 'mysql');
+                    $balance = DB::connection($centralConnection)->table('tenant_balances')
                         ->where('tenant_id', $order->tenant_id)
                         ->first();
 
                     if ($balance) {
-                        $dbConnection->table('tenant_balances')
+                        DB::connection($centralConnection)->table('tenant_balances')
                             ->where('tenant_id', $order->tenant_id)
                             ->update([
                                 'available_balance' => $balance->available_balance + $order->tenant_earning,
                                 'pending_balance' => max(0, $balance->pending_balance - $order->tenant_earning),
+                                'total_earnings' => $balance->total_earnings + $order->tenant_earning,
                                 'approved_orders' => $balance->approved_orders + 1,
                                 'pending_orders' => max(0, $balance->pending_orders - 1),
                                 'updated_at' => now()
                             ]);
                     } else {
                         // Create tenant balance if it doesn't exist
-                        $dbConnection->table('tenant_balances')->insert([
+                        DB::connection($centralConnection)->table('tenant_balances')->insert([
                             'tenant_id' => $order->tenant_id,
                             'total_earnings' => $order->tenant_earning,
                             'available_balance' => $order->tenant_earning,
@@ -787,18 +789,19 @@ class OrderManagementController extends Controller
             if ($updated) {
                 Log::info("Order {$id} rejected successfully");
 
-                // Update tenant balance - remove pending earning
+                // Update tenant balance - remove pending earning (always use central database)
                 try {
-                    $balance = DB::connection($connectionName)->table('tenant_balances')
+                    $centralConnection = config('tenancy.database.central_connection', 'mysql');
+                    $balance = DB::connection($centralConnection)->table('tenant_balances')
                         ->where('tenant_id', $order->tenant_id)
                         ->first();
 
                     if ($balance) {
-                        DB::connection($connectionName)->table('tenant_balances')
+                        DB::connection($centralConnection)->table('tenant_balances')
                             ->where('tenant_id', $order->tenant_id)
                             ->update([
-                                'pending_balance' => $balance->pending_balance - $order->tenant_earning,
-                                'pending_orders' => $balance->pending_orders - 1,
+                                'pending_balance' => max(0, $balance->pending_balance - $order->tenant_earning),
+                                'pending_orders' => max(0, $balance->pending_orders - 1),
                                 'updated_at' => now()
                             ]);
                     }
