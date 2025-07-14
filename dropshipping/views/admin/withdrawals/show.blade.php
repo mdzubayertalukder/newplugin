@@ -134,20 +134,30 @@
                 <span class="info-label">{{ translate('Tenant ID') }}:</span>
                 <span class="info-value">{{ $withdrawal->tenant_id }}</span>
             </div>
-            @if($withdrawal->requestedBy)
+            @if(isset($withdrawal->requested_user))
             <div class="info-row">
                 <span class="info-label">{{ translate('Requested By') }}:</span>
-                <span class="info-value">{{ $withdrawal->requestedBy->name }}</span>
+                <span class="info-value">{{ $withdrawal->requested_user->name }}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">{{ translate('Email') }}:</span>
-                <span class="info-value">{{ $withdrawal->requestedBy->email }}</span>
+                <span class="info-value">{{ $withdrawal->requested_user->email }}</span>
+            </div>
+            @elseif($withdrawal->requested_by)
+            <div class="info-row">
+                <span class="info-label">{{ translate('Requested By') }}:</span>
+                <span class="info-value">{{ translate('User ID') }}: {{ $withdrawal->requested_by }}</span>
             </div>
             @endif
-            @if($withdrawal->processedBy)
+            @if(isset($withdrawal->processed_user))
             <div class="info-row">
                 <span class="info-label">{{ translate('Processed By') }}:</span>
-                <span class="info-value">{{ $withdrawal->processedBy->name }}</span>
+                <span class="info-value">{{ $withdrawal->processed_user->name }}</span>
+            </div>
+            @elseif($withdrawal->processed_by)
+            <div class="info-row">
+                <span class="info-label">{{ translate('Processed By') }}:</span>
+                <span class="info-value">{{ translate('User ID') }}: {{ $withdrawal->processed_by }}</span>
             </div>
             @endif
         </div>
@@ -155,13 +165,23 @@
 </div>
 
 <!-- Payment Details -->
-@if($withdrawal->payment_details)
+@if($withdrawal->payment_details_string || $withdrawal->payment_details)
 <div class="row">
     <div class="col-12">
         <div class="detail-card">
             <h5>{{ translate('Payment Details') }}</h5>
             <div class="bg-light p-3 rounded">
+                @if($withdrawal->payment_details_string)
+                <pre style="margin: 0; white-space: pre-wrap;">{{ $withdrawal->payment_details_string }}</pre>
+                @elseif(is_array($withdrawal->payment_details))
+                @foreach($withdrawal->payment_details as $key => $value)
+                @if($value)
+                <div><strong>{{ ucwords(str_replace('_', ' ', $key)) }}:</strong> {{ $value }}</div>
+                @endif
+                @endforeach
+                @else
                 <pre style="margin: 0; white-space: pre-wrap;">{{ $withdrawal->payment_details }}</pre>
+                @endif
             </div>
         </div>
     </div>

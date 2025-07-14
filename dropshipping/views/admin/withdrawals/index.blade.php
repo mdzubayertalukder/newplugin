@@ -83,13 +83,13 @@
     </div>
     <div class="col-lg-3 col-md-6">
         <div class="stats-card">
-            <h3>{{ currencyExchange($stats['total_amount']) }}</h3>
+            <h3>${{ number_format($stats['total_amount'], 2) }}</h3>
             <p>{{ translate('Total Processed Amount') }}</p>
         </div>
     </div>
     <div class="col-lg-3 col-md-6">
         <div class="stats-card">
-            <h3>{{ currencyExchange($stats['pending_amount']) }}</h3>
+            <h3>${{ number_format($stats['pending_amount'], 2) }}</h3>
             <p>{{ translate('Pending Amount') }}</p>
         </div>
     </div>
@@ -147,20 +147,20 @@
                                 <td>#{{ $withdrawal->id }}</td>
                                 <td>
                                     <strong>{{ translate('Tenant') }} {{ $withdrawal->tenant_id }}</strong>
-                                    @if($withdrawal->requestedBy)
-                                    <br><small class="text-muted">{{ $withdrawal->requestedBy->name }}</small>
+                                    @if($withdrawal->requested_by)
+                                    <br><small class="text-muted">{{ translate('User ID') }}: {{ $withdrawal->requested_by }}</small>
                                     @endif
                                 </td>
                                 <td>
-                                    <strong>{{ currencyExchange($withdrawal->amount) }}</strong>
+                                    <strong>${{ number_format($withdrawal->amount, 2) }}</strong>
                                     @if($withdrawal->admin_fee > 0)
-                                    <br><small class="text-muted">{{ translate('Fee') }}: {{ currencyExchange($withdrawal->admin_fee) }}</small>
+                                    <br><small class="text-muted">{{ translate('Fee') }}: ${{ number_format($withdrawal->admin_fee, 2) }}</small>
                                     @endif
                                 </td>
                                 <td>
                                     {{ ucfirst($withdrawal->payment_method) }}
-                                    @if($withdrawal->payment_details)
-                                    <br><small class="text-muted">{{ Str::limit($withdrawal->payment_details, 30) }}</small>
+                                    @if(!empty($withdrawal->payment_details_string))
+                                    <br><small class="text-muted">{{ Str::limit($withdrawal->payment_details_string, 30) }}</small>
                                     @endif
                                 </td>
                                 <td>

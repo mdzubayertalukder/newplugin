@@ -5,6 +5,7 @@ namespace Plugin\Dropshipping\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Plugin\Dropshipping\Models\WithdrawalRequest;
 use Plugin\Dropshipping\Models\WithdrawalSetting;
@@ -12,12 +13,26 @@ use Plugin\Dropshipping\Models\TenantBalance;
 
 class WithdrawalController extends Controller
 {
+    public function __construct()
+    {
+        // Force central database connection for admin operations
+        $this->middleware(function ($request, $next) {
+            // Ensure we're using the central database connection
+            $centralConnection = config('tenancy.database.central_connection', 'mysql');
+            Config::set('database.default', $centralConnection);
+            DB::setDefaultConnection($centralConnection);
+
+            return $next($request);
+        });
+    }
+
     /**
      * Display all withdrawal requests
      */
     public function index(Request $request)
     {
-        $query = WithdrawalRequest::with(['requestedBy', 'processedBy']);
+        // Remove eager loading of user relationships to avoid tenant database issues
+        $query = WithdrawalRequest::query();
 
         // Filter by status
         if ($request->filled('status') && $request->status !== 'all') {
@@ -40,6 +55,28 @@ class WithdrawalController extends Controller
         }
 
         $withdrawals = $query->orderBy('created_at', 'desc')->paginate(20);
+
+        // NOTE: User data loading is temporarily disabled to avoid multi-tenant database conflicts
+        // User IDs will be displayed instead of names until this is properly resolved
+
+        // Convert payment_details arrays to strings to prevent view errors
+        foreach ($withdrawals as $withdrawal) {
+            if (is_array($withdrawal->payment_details)) {
+                $details = [];
+                if (isset($withdrawal->payment_details['mobile_number'])) {
+                    $details[] = $withdrawal->payment_details['mobile_number'];
+                }
+                if (isset($withdrawal->payment_details['account_holder_name'])) {
+                    $details[] = $withdrawal->payment_details['account_holder_name'];
+                }
+                if (isset($withdrawal->payment_details['account_number'])) {
+                    $details[] = $withdrawal->payment_details['account_number'];
+                }
+                $withdrawal->payment_details_string = implode(', ', array_filter($details));
+            } else {
+                $withdrawal->payment_details_string = $withdrawal->payment_details;
+            }
+        }
 
         // Get statistics
         $stats = [
@@ -66,8 +103,53 @@ class WithdrawalController extends Controller
      */
     public function show($id)
     {
-        $withdrawal = WithdrawalRequest::with(['requestedBy', 'processedBy', 'tenantBalance'])
-            ->findOrFail($id);
+        // Explicitly force central database connection for admin operations
+        $centralConnection = config('tenancy.database.central_connection', 'mysql');
+        Config::set('database.default', $centralConnection);
+        DB::setDefaultConnection($centralConnection);
+
+        // Remove user relationship eager loading to avoid tenant database issues
+        $withdrawal = WithdrawalRequest::on($centralConnection)->with(['tenantBalance'])->findOrFail($id);
+
+        // Manually load user data from central database to avoid tenant database conflicts
+        if ($withdrawal->requested_by) {
+            try {
+                $withdrawal->requested_user = DB::connection($centralConnection)->table('users')
+                    ->where('id', $withdrawal->requested_by)
+                    ->first();
+            } catch (\Exception $e) {
+                // If user lookup fails, just continue without user data
+                $withdrawal->requested_user = null;
+            }
+        }
+
+        if ($withdrawal->processed_by) {
+            try {
+                $withdrawal->processed_user = DB::connection($centralConnection)->table('users')
+                    ->where('id', $withdrawal->processed_by)
+                    ->first();
+            } catch (\Exception $e) {
+                // If user lookup fails, just continue without user data
+                $withdrawal->processed_user = null;
+            }
+        }
+
+        // Convert payment_details arrays to strings for display
+        if (is_array($withdrawal->payment_details)) {
+            $details = [];
+            if (isset($withdrawal->payment_details['mobile_number'])) {
+                $details[] = $withdrawal->payment_details['mobile_number'];
+            }
+            if (isset($withdrawal->payment_details['account_holder_name'])) {
+                $details[] = $withdrawal->payment_details['account_holder_name'];
+            }
+            if (isset($withdrawal->payment_details['account_number'])) {
+                $details[] = $withdrawal->payment_details['account_number'];
+            }
+            $withdrawal->payment_details_string = implode(', ', array_filter($details));
+        } else {
+            $withdrawal->payment_details_string = $withdrawal->payment_details;
+        }
 
         return view('plugin/dropshipping::admin.withdrawals.show', compact('withdrawal'));
     }
