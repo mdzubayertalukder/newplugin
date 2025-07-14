@@ -669,10 +669,28 @@ class OrderManagementController extends Controller
             }
         } catch (\Exception $e) {
             Log::error("Error in approve method for order {$id}: " . $e->getMessage());
-            if ($request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => 'Error approving order: ' . $e->getMessage()]);
+            Log::error("Stack trace: " . $e->getTraceAsString());
+
+            $errorMessage = 'Error approving order: ' . $e->getMessage();
+
+            // Add more specific error context
+            if (strpos($e->getMessage(), 'not found') !== false) {
+                $errorMessage = "Order with ID {$id} not found. Please check if the order exists.";
+            } elseif (strpos($e->getMessage(), 'CSRF') !== false) {
+                $errorMessage = "Security token mismatch. Please refresh the page and try again.";
+            } elseif (strpos($e->getMessage(), 'Connection') !== false) {
+                $errorMessage = "Database connection error. Please contact system administrator.";
             }
-            return back()->withErrors(['message' => 'Error approving order: ' . $e->getMessage()]);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage,
+                    'error_details' => $e->getMessage(),
+                    'order_id' => $id
+                ]);
+            }
+            return back()->withErrors(['message' => $errorMessage]);
         }
     }
 

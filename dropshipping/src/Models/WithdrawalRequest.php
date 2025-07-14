@@ -13,25 +13,26 @@ class WithdrawalRequest extends Model
         'tenant_id',
         'request_number',
         'amount',
+        'payment_method',
+        'payment_details',
         'status',
-        'bank_name',
-        'account_number',
-        'account_holder_name',
-        'bank_code',
-        'swift_code',
-        'additional_details',
+        'notes',
         'admin_notes',
         'rejection_reason',
         'processed_by',
         'processed_at',
         'requested_at',
-        'requested_by'
+        'requested_by',
+        'approved_by',
+        'approved_at'
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'payment_details' => 'array',
         'processed_at' => 'datetime',
         'requested_at' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     public static function boot()

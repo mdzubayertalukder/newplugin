@@ -66,15 +66,26 @@ class WithdrawalController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        // Basic validation
+        $rules = [
             'amount' => 'required|numeric|min:1',
-            'bank_name' => 'required|string|max:255',
-            'account_number' => 'required|string|max:50',
+            'payment_method' => 'required|in:bank_transfer,bkash,nogod,rocket,paypal',
             'account_holder_name' => 'required|string|max:255',
-            'bank_code' => 'nullable|string|max:20',
-            'swift_code' => 'nullable|string|max:20',
-            'additional_details' => 'nullable|string|max:1000',
-        ]);
+            'notes' => 'nullable|string|max:1000',
+        ];
+
+        // Add conditional validation based on payment method
+        if ($request->payment_method === 'bank_transfer') {
+            $rules['bank_name'] = 'required|string|max:255';
+            $rules['account_number'] = 'required|string|max:50';
+            $rules['routing_number'] = 'nullable|string|max:20';
+        } elseif (in_array($request->payment_method, ['bkash', 'nogod', 'rocket'])) {
+            $rules['mobile_number'] = 'required|string|max:20';
+        } elseif ($request->payment_method === 'paypal') {
+            $rules['paypal_email'] = 'required|email|max:255';
+        }
+
+        $request->validate($rules);
 
         $tenantId = tenant('id');
         $userId = Auth::id();
@@ -108,21 +119,35 @@ class WithdrawalController extends Controller
                 return back()->withErrors(['amount' => 'Amount exceeds available balance after considering pending withdrawals.']);
             }
 
+            // Prepare payment details based on payment method
+            $paymentDetails = [
+                'account_holder_name' => $request->account_holder_name,
+            ];
+
+            if ($request->payment_method === 'bank_transfer') {
+                $paymentDetails['bank_name'] = $request->bank_name;
+                $paymentDetails['account_number'] = $request->account_number;
+                $paymentDetails['routing_number'] = $request->routing_number;
+            } elseif (in_array($request->payment_method, ['bkash', 'nogod', 'rocket'])) {
+                $paymentDetails['mobile_number'] = '+88' . $request->mobile_number;
+                $paymentDetails['account_number'] = '+88' . $request->mobile_number;
+            } elseif ($request->payment_method === 'paypal') {
+                $paymentDetails['paypal_email'] = $request->paypal_email;
+                $paymentDetails['account_number'] = $request->paypal_email;
+            }
+
             // Create withdrawal request
             $withdrawal = WithdrawalRequest::create([
                 'tenant_id' => $tenantId,
                 'amount' => $request->amount,
-                'bank_name' => $request->bank_name,
-                'account_number' => $request->account_number,
-                'account_holder_name' => $request->account_holder_name,
-                'bank_code' => $request->bank_code,
-                'swift_code' => $request->swift_code,
-                'additional_details' => $request->additional_details,
+                'payment_method' => $request->payment_method,
+                'payment_details' => $paymentDetails,
+                'notes' => $request->notes,
                 'requested_by' => $userId,
                 'status' => 'pending'
             ]);
 
-            return redirect()->route('tenant.dropshipping.withdrawals.index')
+            return redirect()->route('user.dropshipping.withdrawals.index')
                 ->with('success', "Withdrawal request {$withdrawal->request_number} submitted successfully. It will be reviewed by the admin.");
         } catch (\Exception $e) {
             return back()->withErrors(['amount' => $e->getMessage()]);

@@ -468,13 +468,19 @@ $totalEarnings = $totalAvailableBalance = 0;
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content'),
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         admin_notes: ''
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         location.reload();
@@ -483,7 +489,8 @@ $totalEarnings = $totalAvailableBalance = 0;
                     }
                 })
                 .catch(error => {
-                    alert('{{ translate("Error approving order") }}');
+                    console.error('Error:', error);
+                    alert('{{ translate("Error approving order") }}: ' + error.message);
                 });
         }
     }

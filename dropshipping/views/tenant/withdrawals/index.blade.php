@@ -66,7 +66,7 @@
                         <i class="fas fa-shopping-cart"></i> {{__('Back to Orders')}}
                     </a>
                     @if($balance->available_balance > 0)
-                    <a href="{{ route('dropshipping.withdrawals.create') }}" class="btn btn-primary">
+                    <a href="{{ route('user.dropshipping.withdrawals.create') }}" class="btn btn-primary">
                         <i class="fas fa-plus"></i> {{__('Request Withdrawal')}}
                     </a>
                     @endif
@@ -154,7 +154,7 @@
                     <h5 class="card-title">{{__('Withdrawal Requests')}}</h5>
                     <div class="card-header-actions">
                         @if($balance->available_balance >= $settings->minimum_withdrawal_amount)
-                        <a href="{{ route('dropshipping.withdrawal.create') }}" class="btn btn-primary btn-sm">
+                        <a href="{{ route('user.dropshipping.withdrawals.create') }}" class="btn btn-primary btn-sm">
                             <i class="fas fa-plus"></i> {{__('New Request')}}
                         </a>
                         @endif
@@ -179,9 +179,16 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <small class="text-muted">
-                                            <strong>{{__('Bank')}}:</strong> {{ $withdrawal->bank_name }}<br>
-                                            <strong>{{__('Account')}}:</strong> {{ $withdrawal->account_number }}<br>
-                                            <strong>{{__('Holder')}}:</strong> {{ $withdrawal->account_holder_name }}
+                                            <strong>{{__('Payment Method')}}:</strong> {{ ucfirst(str_replace('_', ' ', $withdrawal->payment_method)) }}<br>
+                                            @if($withdrawal->payment_method === 'bank_transfer')
+                                            <strong>{{__('Bank')}}:</strong> {{ $withdrawal->payment_details['bank_name'] ?? 'N/A' }}<br>
+                                            <strong>{{__('Account')}}:</strong> {{ $withdrawal->payment_details['account_number'] ?? 'N/A' }}<br>
+                                            @elseif(in_array($withdrawal->payment_method, ['bkash', 'nogod', 'rocket']))
+                                            <strong>{{__('Mobile')}}:</strong> {{ $withdrawal->payment_details['mobile_number'] ?? 'N/A' }}<br>
+                                            @elseif($withdrawal->payment_method === 'paypal')
+                                            <strong>{{__('PayPal')}}:</strong> {{ $withdrawal->payment_details['paypal_email'] ?? 'N/A' }}<br>
+                                            @endif
+                                            <strong>{{__('Holder')}}:</strong> {{ $withdrawal->payment_details['account_holder_name'] ?? 'N/A' }}
                                         </small>
                                     </div>
                                     @if($withdrawal->admin_notes)

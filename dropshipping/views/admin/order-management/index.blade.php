@@ -728,7 +728,8 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="_token"]').getAttribute('content'),
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({
                     admin_notes: notes
