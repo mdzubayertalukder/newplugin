@@ -180,7 +180,10 @@ class DropshippingOrder extends Model
      */
     protected function updateTenantBalance()
     {
-        $balance = \Plugin\Dropshipping\Models\TenantBalance::firstOrCreate(
+        // Force central database connection for tenant balance operations
+        $centralConnection = config('tenancy.database.central_connection', 'mysql');
+
+        $balance = \Plugin\Dropshipping\Models\TenantBalance::on($centralConnection)->firstOrCreate(
             ['tenant_id' => $this->tenant_id],
             [
                 'available_balance' => 0,
@@ -193,7 +196,7 @@ class DropshippingOrder extends Model
             ]
         );
 
-        // Move from pending to available balance
+        // Move from pending to available balance using central database
         $balance->increment('available_balance', $this->tenant_earning);
         $balance->decrement('pending_balance', $this->tenant_earning);
         $balance->increment('total_earnings', $this->tenant_earning);
