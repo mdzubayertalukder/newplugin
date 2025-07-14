@@ -70,6 +70,58 @@
                         </div>
                     </div>
 
+                    <hr>
+                    <h5 class="mb-3">{{ translate('Serper.dev Integration') }}</h5>
+                    <p class="text-muted small mb-4">{{ translate('Configure Serper.dev API for product research, price comparison, and SEO analysis') }}</p>
+
+                    <div class="form-group">
+                        <label for="serper_api_key" class="form-label">{{ translate('Serper.dev API Key') }}</label>
+                        <input type="password" class="form-control" id="serper_api_key" name="serper_api_key" value="{{ $settings['serper_api_key'] ?? '' }}" placeholder="Enter your Serper.dev API key">
+                        <small class="form-text text-muted">
+                            {{ translate('Get your API key from') }} <a href="https://serper.dev" target="_blank">serper.dev</a>. 
+                            {{ translate('Required for product research and competitor analysis features.') }}
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="enable_auto_research" name="enable_auto_research" value="1" {{ ($settings['enable_auto_research'] ?? false) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="enable_auto_research">
+                                {{ translate('Enable automatic product research on view details') }}
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">{{ translate('Automatically search for product information when users click "View Details"') }}</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="research_results_limit" class="form-label">{{ translate('Research Results Limit') }}</label>
+                        <select class="form-control" id="research_results_limit" name="research_results_limit">
+                            <option value="5" {{ ($settings['research_results_limit'] ?? '10') == '5' ? 'selected' : '' }}>5 {{ translate('results') }}</option>
+                            <option value="10" {{ ($settings['research_results_limit'] ?? '10') == '10' ? 'selected' : '' }}>10 {{ translate('results') }}</option>
+                            <option value="15" {{ ($settings['research_results_limit'] ?? '10') == '15' ? 'selected' : '' }}>15 {{ translate('results') }}</option>
+                            <option value="20" {{ ($settings['research_results_limit'] ?? '10') == '20' ? 'selected' : '' }}>20 {{ translate('results') }}</option>
+                        </select>
+                        <small class="form-text text-muted">{{ translate('Maximum number of research results to fetch per product') }}</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="enable_price_tracking" name="enable_price_tracking" value="1" {{ ($settings['enable_price_tracking'] ?? true) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="enable_price_tracking">
+                                {{ translate('Enable price comparison and tracking') }}
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="enable_seo_analysis" name="enable_seo_analysis" value="1" {{ ($settings['enable_seo_analysis'] ?? true) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="enable_seo_analysis">
+                                {{ translate('Enable SEO analysis and title optimization') }}
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <button type="submit" class="btn btn-primary">
                             <i class="icofont-save"></i> {{ translate('Save Settings') }}

@@ -236,6 +236,9 @@ class DropshippingTenantController extends Controller
                 }
             }
 
+            // Add currency symbol (default to $ if not set)
+            $product->currency_symbol = '$';
+
             $html = view('plugin/dropshipping::tenant.partials.product-details', compact('product', 'images', 'categories'))->render();
 
             return response()->json([

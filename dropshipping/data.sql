@@ -242,7 +242,13 @@ INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description
 ('import_product_reviews', '0', 'boolean', 'Import product reviews along with products'),
 ('max_sync_products_per_batch', '50', 'integer', 'Maximum products to sync per batch'),
 ('notification_email', '', 'string', 'Email for import notifications'),
-('enable_import_notifications', '1', 'boolean', 'Send notifications for import activities');
+('enable_import_notifications', '1', 'boolean', 'Send notifications for import activities'),
+-- Serper.dev Integration Settings
+('serper_api_key', '', 'string', 'Serper.dev API key for product research'),
+('enable_auto_research', '0', 'boolean', 'Enable automatic product research on view details'),
+('research_results_limit', '10', 'integer', 'Maximum number of research results to fetch per product'),
+('enable_price_tracking', '1', 'boolean', 'Enable price comparison and tracking'),
+('enable_seo_analysis', '1', 'boolean', 'Enable SEO analysis and title optimization');
 
 -- Insert default withdrawal settings
 INSERT IGNORE INTO `withdrawal_settings` (`minimum_withdrawal_amount`, `maximum_withdrawal_amount`, `withdrawal_fee_percentage`, `withdrawal_fee_fixed`, `withdrawal_processing_days`, `auto_approve_withdrawals`, `withdrawal_terms`, `bank_requirements`, `is_active`, `created_at`, `updated_at`) VALUES

@@ -5,6 +5,7 @@ use Plugin\Dropshipping\Http\Controllers\Tenant\DropshippingTenantController;
 use Plugin\Dropshipping\Http\Controllers\Tenant\ProductImportController;
 use Plugin\Dropshipping\Http\Controllers\Tenant\OrderManagementController;
 use Plugin\Dropshipping\Http\Controllers\Tenant\WithdrawalController;
+use Plugin\Dropshipping\Http\Controllers\Tenant\ProductResearchController;
 
 // Simple tenant routes for dropshipping
 Route::group(['prefix' => 'user', 'as' => 'user.dropshipping.', 'middleware' => ['auth']], function () {
@@ -20,6 +21,15 @@ Route::group(['prefix' => 'user', 'as' => 'user.dropshipping.', 'middleware' => 
 
     // Dashboard (optional)
     Route::get('/dropshipping-dashboard', [DropshippingTenantController::class, 'dashboard'])->name('dashboard');
+
+    // Product Research Routes (Serper Integration)
+    Route::prefix('dropshipping/research')->as('research.')->group(function () {
+        Route::post('/product/{productId}', [ProductResearchController::class, 'researchProduct'])->name('product');
+        Route::post('/price-comparison/{productId}', [ProductResearchController::class, 'priceComparison'])->name('price.comparison');
+        Route::post('/seo-analysis/{productId}', [ProductResearchController::class, 'seoAnalysis'])->name('seo.analysis');
+        Route::post('/competitor-analysis/{productId}', [ProductResearchController::class, 'competitorAnalysis'])->name('competitor.analysis');
+        Route::post('/search', [ProductResearchController::class, 'searchProduct'])->name('search');
+    });
 
     // Order Management Routes
     Route::prefix('dropshipping/orders')->as('orders.')->group(function () {
@@ -53,6 +63,15 @@ Route::group(['as' => 'dropshipping.', 'middleware' => ['auth']], function () {
     Route::post('/dropshipping/import/{productId}', [ProductImportController::class, 'importSingle'])->name('import.product');
     Route::get('/dropshipping/history', [ProductImportController::class, 'history'])->name('import.history');
     Route::get('/dropshipping/product-details/{productId}', [DropshippingTenantController::class, 'getProductDetails'])->name('product.details');
+
+    // Product Research (Direct Access)
+    Route::prefix('dropshipping/research')->as('research.')->group(function () {
+        Route::post('/product/{productId}', [ProductResearchController::class, 'researchProduct'])->name('product.direct');
+        Route::post('/price-comparison/{productId}', [ProductResearchController::class, 'priceComparison'])->name('price.comparison.direct');
+        Route::post('/seo-analysis/{productId}', [ProductResearchController::class, 'seoAnalysis'])->name('seo.analysis.direct');
+        Route::post('/competitor-analysis/{productId}', [ProductResearchController::class, 'competitorAnalysis'])->name('competitor.analysis.direct');
+        Route::post('/search', [ProductResearchController::class, 'searchProduct'])->name('search.direct');
+    });
 
     // Order Management (Direct Access)
     Route::prefix('dropshipping')->group(function () {

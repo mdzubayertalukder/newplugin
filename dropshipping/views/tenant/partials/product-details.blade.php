@@ -1,7 +1,7 @@
 <div class="product-details">
     <div class="row">
         <!-- Product Images -->
-        <div class="col-md-6">
+        <div class="col-md-5">
             @if(!empty($images))
             <div id="productCarousel" class="carousel slide" data-bs-ride="carousel">
                 <div class="carousel-inner">
@@ -32,13 +32,13 @@
         </div>
 
         <!-- Product Information -->
-        <div class="col-md-6">
+        <div class="col-md-7">
             <div class="product-info">
                 <!-- Store Badge -->
-                <div class="mb-2">
+                <div class="mb-3">
                     <span class="badge bg-primary">{{ $product->store_name }}</span>
                     @if($product->stock_quantity > 0)
-                    <span class="badge bg-success">In Stock</span>
+                    <span class="badge bg-success">In Stock ({{ $product->stock_quantity }})</span>
                     @else
                     <span class="badge bg-warning">Out of Stock</span>
                     @endif
@@ -48,160 +48,283 @@
                 <h4 class="fw-bold text-dark mb-3">{{ $product->name }}</h4>
 
                 <!-- Pricing -->
-                <div class="mb-3">
-                    @if($product->sale_price && $product->sale_price != $product->regular_price)
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="h4 text-danger mb-0">${{ number_format(floatval($product->sale_price), 2) }}</span>
-                        <span class="text-muted text-decoration-line-through">${{ number_format(floatval($product->regular_price), 2) }}</span>
-                        <span class="badge bg-danger">
-                            {{ round((($product->regular_price - $product->sale_price) / $product->regular_price) * 100) }}% OFF
-                        </span>
-                    </div>
-                    @else
-                    <span class="h4 text-primary">${{ number_format(floatval($product->regular_price), 2) }}</span>
-                    @endif
-                </div>
-
-                <!-- Product Details Grid -->
-                <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <small class="text-muted">SKU:</small>
-                        <div class="fw-semibold">{{ $product->sku ?: 'N/A' }}</div>
-                    </div>
-                    <div class="col-6">
-                        <small class="text-muted">Stock:</small>
-                        <div class="fw-semibold">{{ $product->stock_quantity ?: '0' }} units</div>
-                    </div>
-                    @if($product->weight)
-                    <div class="col-6">
-                        <small class="text-muted">Weight:</small>
-                        <div class="fw-semibold">{{ $product->weight }}</div>
-                    </div>
-                    @endif
-                    @if(!empty($categories))
-                    <div class="col-12">
-                        <small class="text-muted">Categories:</small>
-                        <div class="fw-semibold">{{ implode(', ', $categories) }}</div>
-                    </div>
-                    @endif
-                </div>
-
-                <!-- Short Description -->
-                @if($product->short_description)
-                <div class="mb-3">
-                    <h6>Overview</h6>
-                    <p class="text-muted">{{ strip_tags($product->short_description) }}</p>
-                </div>
-                @endif
-
-                <!-- Import Action -->
-                <div class="mt-4">
-                    <div class="row g-2">
-                        <div class="col-8">
-                            <label class="form-label small">Markup Percentage:</label>
-                            <div class="input-group input-group-sm">
-                                <input type="number" class="form-control" id="markupPercentage" value="20" min="0" max="500">
-                                <span class="input-group-text">%</span>
+                <div class="pricing-info mb-3">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="price-card border rounded p-2 text-center">
+                                <small class="text-muted">Your Cost</small>
+                                <div class="h5 mb-0">{{ $product->currency_symbol }}{{ number_format(floatval($product->regular_price), 2) }}</div>
                             </div>
                         </div>
-                        <div class="col-4 d-flex align-items-end">
-                            <button type="button"
-                                class="btn btn-primary btn-sm w-100"
-                                onclick="importProductFromModal({{ $product->id }})"
-                                {{ $product->stock_quantity <= 0 ? 'disabled' : '' }}>
-                                <i class="fas fa-download"></i> Import
-                            </button>
+                        <div class="col-6">
+                            <div class="price-card border rounded p-2 text-center">
+                                <small class="text-muted">Suggested Sale Price</small>
+                                <div class="h5 mb-0 text-success">{{ $product->currency_symbol }}{{ number_format(floatval($product->regular_price) * 1.7, 2) }}</div>
+                            </div>
                         </div>
                     </div>
-                    <small class="text-muted">
-                        Your price: $<span id="calculatedPrice">{{ number_format(floatval($product->regular_price) * 1.2, 2) }}</span>
-                    </small>
+                </div>
+
+                <!-- Quick Info -->
+                <div class="product-stats mb-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="stat-item">
+                                <div class="h6 mb-0">{{ strlen($product->description) }}</div>
+                                <small class="text-muted">Characters</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-item">
+                                <div class="h6 mb-0">{{ count($images) }}</div>
+                                <small class="text-muted">Images</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="stat-item">
+                                <div class="h6 mb-0" id="categoryInfo">General</div>
+                                <small class="text-muted">Category</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Research Button -->
+                <div class="text-center mb-3">
+                    <button type="button" class="btn btn-primary btn-lg w-100" onclick="startProductResearch()">
+                        <i class="fas fa-search me-2"></i>Start Market Research
+                        <div class="spinner-border spinner-border-sm ms-2 d-none" id="researchSpinner" role="status"></div>
+                    </button>
+                    <small class="text-muted">Get comprehensive dropshipping analysis for this product</small>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Full Description -->
-    @if($product->description)
-    <div class="mt-4">
-        <h6>Description</h6>
-        <div class="border-top pt-3">
-            {!! $product->description !!}
+    <!-- Research Results -->
+    <div id="researchResults" class="research-results mt-4" style="display: none;">
+        <!-- Dropshipping Viability Card -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-gradient-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Dropshipping Viability Analysis</h5>
+            </div>
+            <div class="card-body" id="viabilityAnalysis">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Research Tabs -->
+        <ul class="nav nav-pills nav-fill mb-3" id="researchTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="overview-tab" data-bs-toggle="pill" data-bs-target="#overview" type="button" role="tab">
+                    <i class="fas fa-eye me-1"></i>Overview
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="prices-tab" data-bs-toggle="pill" data-bs-target="#prices" type="button" role="tab">
+                    <i class="fas fa-tags me-1"></i>Price Analysis
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="competitors-tab" data-bs-toggle="pill" data-bs-target="#competitors" type="button" role="tab">
+                    <i class="fas fa-users me-1"></i>Competitors
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="images-tab" data-bs-toggle="pill" data-bs-target="#images" type="button" role="tab">
+                    <i class="fas fa-images me-1"></i>Product Images
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="seo-tab" data-bs-toggle="pill" data-bs-target="#seo" type="button" role="tab">
+                    <i class="fas fa-search-plus me-1"></i>SEO Insights
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="researchTabsContent">
+            <!-- Overview Tab -->
+            <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Market Summary</h6>
+                            </div>
+                            <div class="card-body" id="overviewContent">
+                                <div class="text-center text-muted py-4">
+                                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                    <p>Click "Start Market Research" to view comprehensive market analysis</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">Quick Stats</h6>
+                            </div>
+                            <div class="card-body" id="quickStats">
+                                <div class="text-center text-muted py-4">
+                                    <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                                    <p>Market data will appear here</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Price Analysis Tab -->
+            <div class="tab-pane fade" id="prices" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">Competitor Price Analysis</h6>
+                    </div>
+                    <div class="card-body" id="priceAnalysisContent">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-dollar-sign fa-2x mb-2"></i>
+                            <p>Price comparison data will appear here after research</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Competitors Tab -->
+            <div class="tab-pane fade" id="competitors" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">Detailed Competitor Analysis</h6>
+                    </div>
+                    <div class="card-body" id="competitorAnalysisContent">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-building fa-2x mb-2"></i>
+                            <p>Competitor information will appear here after research</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product Images Tab -->
+            <div class="tab-pane fade" id="images" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">Product Images from Market Research</h6>
+                    </div>
+                    <div class="card-body" id="productImagesContent">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-camera fa-2x mb-2"></i>
+                            <p>Market product images will appear here after research</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEO Insights Tab -->
+            <div class="tab-pane fade" id="seo" role="tabpanel">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">SEO Optimization Suggestions</h6>
+                    </div>
+                    <div class="card-body" id="seoAnalysisContent">
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-lightbulb fa-2x mb-2"></i>
+                            <p>SEO recommendations will appear here after research</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    @endif
+
+    <!-- Product Description -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h6 class="mb-0">Product Description</h6>
+        </div>
+        <div class="card-body">
+            <div class="description-content" style="max-height: 200px; overflow-y: auto;">
+                {!! $product->description !!}
+            </div>
+        </div>
+    </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const markupInput = document.getElementById('markupPercentage');
-        const calculatedPriceSpan = document.getElementById('calculatedPrice');
-        const basePrice = {
-            {
-                floatval($product - > regular_price)
-            }
-        };
+<style>
+.pricing-info .price-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    transition: all 0.3s ease;
+}
 
-        if (markupInput && calculatedPriceSpan) {
-            markupInput.addEventListener('input', function() {
-                const markup = parseFloat(this.value) || 0;
-                const finalPrice = basePrice * (1 + markup / 100);
-                calculatedPriceSpan.textContent = finalPrice.toFixed(2);
-            });
-        }
-    });
+.pricing-info .price-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
 
-    function importProductFromModal(productId) {
-        const markup = document.getElementById('markupPercentage').value || 20;
-        const button = event.target;
+.product-stats .stat-item {
+    padding: 10px;
+    border-radius: 8px;
+    background: #f8f9fa;
+    margin: 0 2px;
+}
 
-        // Disable button and show loading
-        button.disabled = true;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+.research-results .card {
+    border: none !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
 
-        fetch('/dropshipping/import/' + productId, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                },
-                body: JSON.stringify({
-                    markup_percentage: parseFloat(markup)
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    button.innerHTML = '<i class="fas fa-check"></i> Imported!';
-                    button.classList.add('btn-success');
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
 
-                    // Show success toast
-                    if (typeof showToast === 'function') {
-                        showToast('success', data.message || 'Product imported successfully!');
-                    }
+.viability-excellent { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+.viability-good { background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); }
+.viability-fair { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }
+.viability-poor { background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%); }
 
-                    // Close modal after short delay
-                    setTimeout(() => {
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('productDetailsModal'));
-                        if (modal) modal.hide();
-                    }, 1500);
-                } else {
-                    button.innerHTML = '<i class="fas fa-download"></i> Import';
-                    button.disabled = false;
+.competitor-card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+}
 
-                    if (typeof showToast === 'function') {
-                        showToast('error', data.message || 'Import failed. Please try again.');
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('Import error:', error);
-                button.innerHTML = '<i class="fas fa-download"></i> Import';
-                button.disabled = false;
+.competitor-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
 
-                if (typeof showToast === 'function') {
-                    showToast('error', 'An error occurred. Please try again.');
-                }
-            });
-    }
-</script>
+.price-range-bar {
+    height: 8px;
+    background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+    border-radius: 4px;
+    position: relative;
+}
+
+.price-indicator {
+    position: absolute;
+    top: -2px;
+    width: 12px;
+    height: 12px;
+    background: #007bff;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.image-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.research-image {
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.research-image:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+</style>
