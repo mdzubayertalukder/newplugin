@@ -164,18 +164,23 @@ class WithdrawalController extends Controller
      */
     public function approve(Request $request, $id)
     {
+        // Explicitly force central database connection for admin operations
+        $centralConnection = config('tenancy.database.central_connection', 'mysql');
+        Config::set('database.default', $centralConnection);
+        DB::setDefaultConnection($centralConnection);
+
         $request->validate([
             'admin_notes' => 'nullable|string|max:1000',
         ]);
 
-        $withdrawal = WithdrawalRequest::findOrFail($id);
+        $withdrawal = WithdrawalRequest::on($centralConnection)->findOrFail($id);
 
         if (!$withdrawal->canBeApproved()) {
             return back()->withErrors(['message' => 'This withdrawal request cannot be approved.']);
         }
 
         // Check if tenant has sufficient balance
-        $balance = TenantBalance::forTenant($withdrawal->tenant_id)->first();
+        $balance = TenantBalance::on($centralConnection)->where('tenant_id', $withdrawal->tenant_id)->first();
         if (!$balance || !$balance->canWithdraw($withdrawal->amount)) {
             return back()->withErrors(['message' => 'Tenant has insufficient balance for this withdrawal.']);
         }
@@ -191,11 +196,16 @@ class WithdrawalController extends Controller
      */
     public function reject(Request $request, $id)
     {
+        // Explicitly force central database connection for admin operations
+        $centralConnection = config('tenancy.database.central_connection', 'mysql');
+        Config::set('database.default', $centralConnection);
+        DB::setDefaultConnection($centralConnection);
+
         $request->validate([
             'rejection_reason' => 'required|string|max:1000',
         ]);
 
-        $withdrawal = WithdrawalRequest::findOrFail($id);
+        $withdrawal = WithdrawalRequest::on($centralConnection)->findOrFail($id);
 
         if (!$withdrawal->canBeRejected()) {
             return back()->withErrors(['message' => 'This withdrawal request cannot be rejected.']);
@@ -212,18 +222,23 @@ class WithdrawalController extends Controller
      */
     public function markAsProcessed(Request $request, $id)
     {
+        // Explicitly force central database connection for admin operations
+        $centralConnection = config('tenancy.database.central_connection', 'mysql');
+        Config::set('database.default', $centralConnection);
+        DB::setDefaultConnection($centralConnection);
+
         $request->validate([
             'admin_notes' => 'nullable|string|max:1000',
         ]);
 
-        $withdrawal = WithdrawalRequest::findOrFail($id);
+        $withdrawal = WithdrawalRequest::on($centralConnection)->findOrFail($id);
 
         if ($withdrawal->status !== 'approved') {
             return back()->withErrors(['message' => 'Only approved withdrawals can be marked as processed.']);
         }
 
         // Check tenant balance again
-        $balance = TenantBalance::forTenant($withdrawal->tenant_id)->first();
+        $balance = TenantBalance::on($centralConnection)->where('tenant_id', $withdrawal->tenant_id)->first();
         if (!$balance || !$balance->canWithdraw($withdrawal->amount)) {
             return back()->withErrors(['message' => 'Tenant no longer has sufficient balance for this withdrawal.']);
         }

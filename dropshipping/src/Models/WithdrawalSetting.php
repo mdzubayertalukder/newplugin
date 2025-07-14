@@ -6,6 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 
 class WithdrawalSetting extends Model
 {
+    /**
+     * The connection name for the model.
+     * Forces this model to use the central database connection
+     *
+     * @var string|null
+     */
+    protected $connection = null;
+
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+
+        // Force central database connection for withdrawal settings
+        $this->connection = config('tenancy.database.central_connection', 'mysql');
+    }
+
     protected $fillable = [
         'minimum_withdrawal_amount',
         'maximum_withdrawal_amount',

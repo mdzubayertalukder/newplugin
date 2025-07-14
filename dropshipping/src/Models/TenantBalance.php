@@ -9,6 +9,22 @@ class TenantBalance extends Model
 {
     use HasFactory;
 
+    /**
+     * The connection name for the model.
+     * Forces this model to use the central database connection
+     *
+     * @var string|null
+     */
+    protected $connection = null;
+
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+
+        // Force central database connection for tenant balances
+        $this->connection = config('tenancy.database.central_connection', 'mysql');
+    }
+
     protected $fillable = [
         'tenant_id',
         'available_balance',
