@@ -16,6 +16,8 @@ class DropshippingPlanLimit extends Model
         'monthly_import_limit',
         'total_import_limit',
         'bulk_import_limit',
+        'monthly_research_limit',
+        'total_research_limit',
         'auto_sync_enabled',
         'pricing_markup_min',
         'pricing_markup_max',
@@ -28,6 +30,8 @@ class DropshippingPlanLimit extends Model
         'monthly_import_limit' => 'integer',
         'total_import_limit' => 'integer',
         'bulk_import_limit' => 'integer',
+        'monthly_research_limit' => 'integer',
+        'total_research_limit' => 'integer',
         'auto_sync_enabled' => 'boolean',
         'pricing_markup_min' => 'decimal:2',
         'pricing_markup_max' => 'decimal:2',
@@ -53,9 +57,9 @@ class DropshippingPlanLimit extends Model
     }
 
     /**
-     * Check if monthly limit is reached for a tenant
+     * Check if monthly import limit is reached for a tenant
      */
-    public function isMonthlyLimitReached($tenantId)
+    public function isMonthlyImportLimitReached($tenantId)
     {
         if ($this->monthly_import_limit === -1) {
             return false; // Unlimited
@@ -71,9 +75,9 @@ class DropshippingPlanLimit extends Model
     }
 
     /**
-     * Check if total limit is reached for a tenant
+     * Check if total import limit is reached for a tenant
      */
-    public function isTotalLimitReached($tenantId)
+    public function isTotalImportLimitReached($tenantId)
     {
         if ($this->total_import_limit === -1) {
             return false; // Unlimited
@@ -84,6 +88,34 @@ class DropshippingPlanLimit extends Model
             ->count();
 
         return $totalImports >= $this->total_import_limit;
+    }
+
+    /**
+     * Check if monthly research limit is reached for a tenant
+     */
+    public function isMonthlyResearchLimitReached($tenantId)
+    {
+        if ($this->monthly_research_limit === -1) {
+            return false; // Unlimited
+        }
+
+        $currentMonthResearch = DropshippingResearchUsage::getMonthlyUsage($tenantId);
+
+        return $currentMonthResearch >= $this->monthly_research_limit;
+    }
+
+    /**
+     * Check if total research limit is reached for a tenant
+     */
+    public function isTotalResearchLimitReached($tenantId)
+    {
+        if ($this->total_research_limit === -1) {
+            return false; // Unlimited
+        }
+
+        $totalResearch = DropshippingResearchUsage::getTotalUsage($tenantId);
+
+        return $totalResearch >= $this->total_research_limit;
     }
 
     /**
@@ -121,6 +153,34 @@ class DropshippingPlanLimit extends Model
     }
 
     /**
+     * Get remaining monthly research for a tenant
+     */
+    public function getRemainingMonthlyResearch($tenantId)
+    {
+        if ($this->monthly_research_limit === -1) {
+            return -1; // Unlimited
+        }
+
+        $currentMonthResearch = DropshippingResearchUsage::getMonthlyUsage($tenantId);
+
+        return max(0, $this->monthly_research_limit - $currentMonthResearch);
+    }
+
+    /**
+     * Get remaining total research for a tenant
+     */
+    public function getRemainingTotalResearch($tenantId)
+    {
+        if ($this->total_research_limit === -1) {
+            return -1; // Unlimited
+        }
+
+        $totalResearch = DropshippingResearchUsage::getTotalUsage($tenantId);
+
+        return max(0, $this->total_research_limit - $totalResearch);
+    }
+
+    /**
      * Check if bulk import is allowed
      */
     public function canBulkImport($quantity)
@@ -130,6 +190,86 @@ class DropshippingPlanLimit extends Model
         }
 
         return $quantity <= $this->bulk_import_limit;
+    }
+
+    /**
+     * Check if a tenant can import products
+     */
+    public function canImport($tenantId, $quantity = 1)
+    {
+        // Check monthly limit
+        if ($this->isMonthlyImportLimitReached($tenantId)) {
+            return [
+                'allowed' => false,
+                'reason' => 'monthly_limit_reached',
+                'message' => 'Monthly import limit of ' . $this->monthly_import_limit . ' products reached. Please upgrade your plan or wait for next month.'
+            ];
+        }
+
+        // Check total limit
+        if ($this->isTotalImportLimitReached($tenantId)) {
+            return [
+                'allowed' => false,
+                'reason' => 'total_limit_reached',
+                'message' => 'Total import limit of ' . $this->total_import_limit . ' products reached. Please upgrade your plan.'
+            ];
+        }
+
+        // Check if this import would exceed monthly limit
+        $remainingMonthly = $this->getRemainingMonthlyImports($tenantId);
+        if ($remainingMonthly !== -1 && $quantity > $remainingMonthly) {
+            return [
+                'allowed' => false,
+                'reason' => 'monthly_limit_would_exceed',
+                'message' => 'This import would exceed your monthly limit. You can import ' . $remainingMonthly . ' more products this month.'
+            ];
+        }
+
+        // Check if this import would exceed total limit
+        $remainingTotal = $this->getRemainingTotalImports($tenantId);
+        if ($remainingTotal !== -1 && $quantity > $remainingTotal) {
+            return [
+                'allowed' => false,
+                'reason' => 'total_limit_would_exceed',
+                'message' => 'This import would exceed your total limit. You can import ' . $remainingTotal . ' more products.'
+            ];
+        }
+
+        return [
+            'allowed' => true,
+            'remaining_monthly' => $remainingMonthly,
+            'remaining_total' => $remainingTotal
+        ];
+    }
+
+    /**
+     * Check if a tenant can perform product research
+     */
+    public function canResearch($tenantId)
+    {
+        // Check monthly limit
+        if ($this->isMonthlyResearchLimitReached($tenantId)) {
+            return [
+                'allowed' => false,
+                'reason' => 'monthly_limit_reached',
+                'message' => 'Monthly research limit of ' . $this->monthly_research_limit . ' researches reached. Please upgrade your plan or wait for next month.'
+            ];
+        }
+
+        // Check total limit
+        if ($this->isTotalResearchLimitReached($tenantId)) {
+            return [
+                'allowed' => false,
+                'reason' => 'total_limit_reached',
+                'message' => 'Total research limit of ' . $this->total_research_limit . ' researches reached. Please upgrade your plan.'
+            ];
+        }
+
+        return [
+            'allowed' => true,
+            'remaining_monthly' => $this->getRemainingMonthlyResearch($tenantId),
+            'remaining_total' => $this->getRemainingTotalResearch($tenantId)
+        ];
     }
 
     /**
@@ -149,70 +289,57 @@ class DropshippingPlanLimit extends Model
     }
 
     /**
-     * Check if category is allowed
+     * Get usage statistics for a tenant
      */
-    public function isCategoryAllowed($categoryId)
+    public function getUsageStats($tenantId)
     {
-        // If no allowed categories specified, all are allowed (unless restricted)
-        if (empty($this->allowed_categories)) {
-            return !$this->isCategoryRestricted($categoryId);
-        }
+        $importStats = [
+            'monthly_imports' => ProductImportHistory::forTenant($tenantId)
+                ->successful()
+                ->whereMonth('imported_at', now()->month)
+                ->whereYear('imported_at', now()->year)
+                ->count(),
+            'total_imports' => ProductImportHistory::forTenant($tenantId)
+                ->successful()
+                ->count()
+        ];
 
-        return in_array($categoryId, $this->allowed_categories);
-    }
+        $researchStats = DropshippingResearchUsage::getUsageStats($tenantId);
 
-    /**
-     * Check if category is restricted
-     */
-    public function isCategoryRestricted($categoryId)
-    {
-        if (empty($this->restricted_categories)) {
-            return false;
-        }
-
-        return in_array($categoryId, $this->restricted_categories);
-    }
-
-    /**
-     * Get formatted limits
-     */
-    public function getFormattedLimitsAttribute()
-    {
         return [
-            'monthly' => $this->monthly_import_limit === -1 ? 'Unlimited' : number_format($this->monthly_import_limit),
-            'total' => $this->total_import_limit === -1 ? 'Unlimited' : number_format($this->total_import_limit),
-            'bulk' => $this->bulk_import_limit === -1 ? 'Unlimited' : number_format($this->bulk_import_limit)
+            'imports' => $importStats,
+            'research' => $researchStats,
+            'limits' => [
+                'monthly_import_limit' => $this->monthly_import_limit,
+                'total_import_limit' => $this->total_import_limit,
+                'bulk_import_limit' => $this->bulk_import_limit,
+                'monthly_research_limit' => $this->monthly_research_limit,
+                'total_research_limit' => $this->total_research_limit
+            ],
+            'remaining' => [
+                'monthly_imports' => $this->getRemainingMonthlyImports($tenantId),
+                'total_imports' => $this->getRemainingTotalImports($tenantId),
+                'monthly_research' => $this->getRemainingMonthlyResearch($tenantId),
+                'total_research' => $this->getRemainingTotalResearch($tenantId)
+            ]
         ];
     }
 
     /**
-     * Get auto sync status badge
+     * Get plan limits for a tenant by package ID
      */
-    public function getAutoSyncBadgeAttribute()
+    public static function getForTenant($tenantId)
     {
-        return $this->auto_sync_enabled
-            ? '<span class="badge badge-success">Enabled</span>'
-            : '<span class="badge badge-secondary">Disabled</span>';
-    }
+        // Get tenant's package from main database
+        $saasAccount = \Illuminate\Support\Facades\DB::connection('mysql')
+            ->table('tl_saas_accounts')
+            ->where('tenant_id', $tenantId)
+            ->first();
 
-    /**
-     * Create default limits for a package
-     */
-    public static function createDefault($packageId)
-    {
-        return self::create([
-            'package_id' => $packageId,
-            'monthly_import_limit' => 100,
-            'total_import_limit' => -1,
-            'bulk_import_limit' => 20,
-            'auto_sync_enabled' => false,
-            'pricing_markup_min' => 0,
-            'pricing_markup_max' => null,
-            'settings' => [
-                'auto_update_prices' => false,
-                'auto_update_stock' => false,
-                'import_reviews' => false
-            ]
-        ]);
+        if (!$saasAccount) {
+            return null;
+        }
+
+        return self::where('package_id', $saasAccount->package_id)->first();
     }
 }

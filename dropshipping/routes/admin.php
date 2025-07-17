@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Plugin\Dropshipping\Http\Controllers\Admin\WooCommerceConfigController;
 use Plugin\Dropshipping\Http\Controllers\Admin\OrderManagementController as AdminOrderController;
 use Plugin\Dropshipping\Http\Controllers\Admin\WithdrawalController as AdminWithdrawalController;
+use Plugin\Dropshipping\Http\Controllers\Admin\AISettingsController;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -643,9 +644,14 @@ Route::group(['prefix' => getAdminPrefix(), 'as' => 'admin.dropshipping.', 'midd
     })->name('debug.test.shipping');
 
     // Plan Limits Management
-    Route::get('/dropshipping/plan-limits', [WooCommerceConfigController::class, 'planLimits'])->name('plan-limits.index');
-    Route::post('/dropshipping/plan-limits', [WooCommerceConfigController::class, 'storePlanLimits'])->name('plan-limits.store');
-    Route::put('/dropshipping/plan-limits/{id}', [WooCommerceConfigController::class, 'updatePlanLimits'])->name('plan-limits.update');
+    Route::get('/dropshipping/plan-limits', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'index'])->name('plan-limits.index');
+    Route::get('/dropshipping/plan-limits/create/{packageId}', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'create'])->name('plan-limits.create');
+    Route::post('/dropshipping/plan-limits', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'store'])->name('plan-limits.store');
+    Route::get('/dropshipping/plan-limits/{packageId}/edit', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'edit'])->name('plan-limits.edit');
+    Route::put('/dropshipping/plan-limits/{packageId}', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'update'])->name('plan-limits.update');
+    Route::delete('/dropshipping/plan-limits/{packageId}', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'destroy'])->name('plan-limits.destroy');
+    Route::get('/dropshipping/plan-limits/{packageId}/usage', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'usage'])->name('plan-limits.usage');
+    Route::post('/dropshipping/plan-limits/create-defaults', [\Plugin\Dropshipping\Http\Controllers\Admin\PlanLimitsController::class, 'createDefaults'])->name('plan-limits.create-defaults');
 
     // Reports
     Route::get('/dropshipping/reports/imports', [WooCommerceConfigController::class, 'importReports'])->name('reports.imports');
@@ -654,6 +660,26 @@ Route::group(['prefix' => getAdminPrefix(), 'as' => 'admin.dropshipping.', 'midd
     // Settings
     Route::get('/dropshipping/settings', [WooCommerceConfigController::class, 'settings'])->name('settings.index');
     Route::post('/dropshipping/settings/update', [WooCommerceConfigController::class, 'updateSettings'])->name('settings.update');
+    Route::post('/dropshipping/settings/test-google-ai', [WooCommerceConfigController::class, 'testGoogleAIStudioApi'])->name('settings.test-google-ai');
+
+    // AI Settings
+    Route::get('/dropshipping/ai-settings', [\Plugin\Dropshipping\Http\Controllers\Admin\AISettingsController::class, 'index'])->name('ai.settings');
+    Route::post('/dropshipping/ai-settings', [\Plugin\Dropshipping\Http\Controllers\Admin\AISettingsController::class, 'store'])->name('ai.settings.store');
+    Route::post('/dropshipping/test-openai', [\Plugin\Dropshipping\Http\Controllers\Admin\AISettingsController::class, 'testOpenAI'])->name('ai.test.openai');
+    Route::post('/dropshipping/test-google-ai', [\Plugin\Dropshipping\Http\Controllers\Admin\AISettingsController::class, 'testGoogleAI'])->name('ai.test.google');
+    Route::post('/dropshipping/test-google-search', [\Plugin\Dropshipping\Http\Controllers\Admin\AISettingsController::class, 'testGoogleSearch'])->name('ai.test.google.search');
+
+    // Search Cache Management Routes
+    Route::prefix('dropshipping/search-cache')->as('search-cache.')->group(function () {
+        Route::get('/', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'index'])->name('index');
+        Route::get('/{id}', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'show'])->name('show');
+        Route::get('/{id}/edit', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'edit'])->name('edit');
+        Route::put('/{id}', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'update'])->name('update');
+        Route::post('/{id}/toggle-status', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'toggleStatus'])->name('toggle.status');
+        Route::delete('/{id}', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'destroy'])->name('destroy');
+        Route::post('/clear-all', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'clearAll'])->name('clear.all');
+        Route::get('/statistics/ajax', [\Plugin\Dropshipping\Http\Controllers\Admin\SearchCacheController::class, 'stats'])->name('stats');
+    });
 
     // Order Management Routes
     Route::prefix('dropshipping/orders')->as('orders.')->group(function () {

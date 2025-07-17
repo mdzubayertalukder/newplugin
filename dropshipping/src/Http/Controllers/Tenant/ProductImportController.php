@@ -9,6 +9,7 @@ use Plugin\Dropshipping\Models\ProductImportHistory;
 use Plugin\Dropshipping\Models\DropshippingPlanLimit;
 use Plugin\Dropshipping\Services\ProductImportService;
 use Plugin\Dropshipping\Services\ImageImportService;
+use Plugin\Dropshipping\Services\LimitService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -55,7 +56,7 @@ class ProductImportController extends Controller
         }
 
         // Get import limits for this tenant
-        $limits = $this->getTenantImportLimits($tenantId);
+        $limits = LimitService::getUsageDisplay($tenantId);
 
         return view('plugin/dropshipping::tenant.import.products', compact(
             'stores',
@@ -114,11 +115,13 @@ class ProductImportController extends Controller
             }
 
             // Check import limits
-            $limits = $this->getTenantImportLimits($tenantId);
-            if ($limits['monthly_used'] >= $limits['monthly_limit']) {
+            $canImport = LimitService::canImport($tenantId, 1);
+            if (!$canImport['allowed']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Monthly import limit reached. Please upgrade your plan or wait for next month.'
+                    'message' => $canImport['message'],
+                    'reason' => $canImport['reason'],
+                    'upgrade_message' => LimitService::getUpgradeMessage($canImport['reason'])
                 ]);
             }
 
@@ -323,21 +326,27 @@ class ProductImportController extends Controller
 
         try {
             $productIds = $request->get('product_ids');
-            $limits = $this->getTenantImportLimits($tenantId);
-
-            // Check bulk import limit
-            if (count($productIds) > $limits['bulk_limit'] && $limits['bulk_limit'] > 0) {
+            $quantity = count($productIds);
+            
+            // Check import limits
+            $canImport = LimitService::canImport($tenantId, $quantity);
+            if (!$canImport['allowed']) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Bulk import limit exceeded. Maximum: ' . $limits['bulk_limit']
+                    'message' => $canImport['message'],
+                    'reason' => $canImport['reason'],
+                    'upgrade_message' => LimitService::getUpgradeMessage($canImport['reason'])
                 ]);
             }
 
-            // Check monthly limit
-            if (($limits['monthly_used'] + count($productIds)) > $limits['monthly_limit'] && $limits['monthly_limit'] > 0) {
+            // Check bulk import limit
+            $limits = LimitService::getTenantLimits($tenantId);
+            if (!$limits->canBulkImport($quantity)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Monthly import limit would be exceeded'
+                    'message' => 'Bulk import limit exceeded. Maximum: ' . $limits->bulk_import_limit,
+                    'reason' => 'bulk_limit_exceeded',
+                    'upgrade_message' => LimitService::getUpgradeMessage('bulk_limit_exceeded')
                 ]);
             }
 

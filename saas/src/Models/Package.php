@@ -39,4 +39,12 @@ class Package extends Model
     {
         return $this->hasMany(PackagePaymentMethod::class, 'package_id');
     }
+
+    /**
+     * Get the dropshipping limits for this package
+     */
+    public function dropshippingLimits()
+    {
+        return $this->hasOne(\Plugin\Dropshipping\Models\DropshippingPlanLimit::class, 'package_id');
+    }
 }

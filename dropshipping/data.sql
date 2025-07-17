@@ -190,6 +190,8 @@ CREATE TABLE IF NOT EXISTS `dropshipping_plan_limits` (
     `monthly_import_limit` int(11) NOT NULL DEFAULT 100 COMMENT '-1 for unlimited',
     `total_import_limit` int(11) NOT NULL DEFAULT -1 COMMENT '-1 for unlimited',
     `bulk_import_limit` int(11) NOT NULL DEFAULT 20 COMMENT '-1 for unlimited',
+    `monthly_research_limit` int(11) NOT NULL DEFAULT 50 COMMENT '-1 for unlimited',
+    `total_research_limit` int(11) NOT NULL DEFAULT -1 COMMENT '-1 for unlimited',
     `auto_sync_enabled` tinyint(1) NOT NULL DEFAULT 0,
     `pricing_markup_min` decimal(5,2) NULL COMMENT 'Minimum markup percentage',
     `pricing_markup_max` decimal(5,2) NULL COMMENT 'Maximum markup percentage',
@@ -201,6 +203,27 @@ CREATE TABLE IF NOT EXISTS `dropshipping_plan_limits` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `dropshipping_plan_limits_package_id_unique` (`package_id`),
     KEY `dropshipping_plan_limits_package_id_index` (`package_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Product Research Usage Tracking Table (goes in tenant databases)
+CREATE TABLE IF NOT EXISTS `dropshipping_research_usage` (
+    `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tenant_id` varchar(255) NOT NULL,
+    `product_id` bigint(20) UNSIGNED NOT NULL,
+    `product_name` varchar(255) NOT NULL,
+    `research_type` enum('full_research','price_comparison','seo_analysis','competitor_analysis') NOT NULL DEFAULT 'full_research',
+    `api_calls_used` int(11) NOT NULL DEFAULT 1,
+    `success` tinyint(1) NOT NULL DEFAULT 1,
+    `error_message` text NULL,
+    `research_data` longtext NULL COMMENT 'JSON data of research results',
+    `researched_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_at` timestamp NULL DEFAULT NULL,
+    `updated_at` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `dropshipping_research_usage_tenant_id_index` (`tenant_id`),
+    KEY `dropshipping_research_usage_product_id_index` (`product_id`),
+    KEY `dropshipping_research_usage_researched_at_index` (`researched_at`),
+    KEY `dropshipping_research_usage_research_type_index` (`research_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Plugin Settings Table

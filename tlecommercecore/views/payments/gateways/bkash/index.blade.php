@@ -217,14 +217,21 @@
                 // Step 1: Get token
                 await getBkashToken();
 
-                // Step 2: Create payment
+                // Step 2: Create payment (now auto-executes)
                 const paymentData = await createPayment();
 
-                // Step 3: Redirect to bKash payment page
-                if (paymentData.bkashURL) {
+                // Check if payment was auto-executed successfully
+                if (paymentData.auto_executed && paymentData.redirect_url) {
+                    // Payment was automatically completed, redirect to success
+                    $('#loading').html('<i class="fa fa-check-circle" style="color: green;"></i> {{ translate("Payment completed successfully! Redirecting...") }}');
+                    setTimeout(() => {
+                        window.location.href = paymentData.redirect_url;
+                    }, 1500);
+                } else if (paymentData.bkashURL) {
+                    // Fallback to bKash URL redirect if provided
                     window.location.href = paymentData.bkashURL;
-                } else {
-                    // Step 4: Execute payment (for direct flow)
+                } else if (!paymentData.auto_executed) {
+                    // Auto-execution failed, try manual execution
                     const result = await executePayment();
 
                     if (result.redirect_url) {
@@ -232,6 +239,8 @@
                     } else {
                         showError('Payment completed but redirect failed');
                     }
+                } else {
+                    showError('Payment processing failed. Please try again.');
                 }
 
             } catch (error) {

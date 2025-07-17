@@ -13,8 +13,16 @@ CREATE TABLE IF NOT EXISTS `dropshipping_settings` (
     UNIQUE KEY `dropshipping_settings_key_unique` (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+<<<<<<< HEAD
+-- Insert default settings (Google AI Studio integration)
+INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description`, `created_at`, `updated_at`) VALUES
+('google_ai_studio_api_key', '', 'string', 'Google AI Studio API key for product research', NOW(), NOW()),
+('google_ai_studio_api_endpoint', 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', 'string', 'Google AI Studio API endpoint', NOW(), NOW()),
+('research_platform', 'google_ai_studio', 'string', 'Selected research platform: google_ai_studio or chatgpt', NOW(), NOW()),
+=======
 -- Insert default settings for Serper.dev integration
 INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description`, `created_at`, `updated_at`) VALUES
+>>>>>>> 9e8aaee60d86aca05b60ddc02aee8cd96e018395
 ('auto_sync_interval', '24', 'integer', 'Auto sync interval in hours', NOW(), NOW()),
 ('default_markup_percentage', '20', 'integer', 'Default markup percentage for imported products', NOW(), NOW()),
 ('enable_auto_price_update', '0', 'boolean', 'Enable automatic price updates from WooCommerce', NOW(), NOW()),
@@ -22,6 +30,9 @@ INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description
 ('import_product_reviews', '0', 'boolean', 'Import product reviews along with products', NOW(), NOW()),
 ('max_sync_products_per_batch', '50', 'integer', 'Maximum products to sync per batch', NOW(), NOW()),
 ('notification_email', '', 'string', 'Email for import notifications', NOW(), NOW()),
+<<<<<<< HEAD
+('enable_import_notifications', '1', 'boolean', 'Send notifications for import activities', NOW(), NOW());
+=======
 ('enable_import_notifications', '1', 'boolean', 'Send notifications for import activities', NOW(), NOW()),
 -- Serper.dev Integration Settings
 ('serper_api_key', '', 'string', 'Serper.dev API key for product research', NOW(), NOW()),
@@ -29,6 +40,7 @@ INSERT IGNORE INTO `dropshipping_settings` (`key`, `value`, `type`, `description
 ('research_results_limit', '10', 'integer', 'Maximum number of research results to fetch per product', NOW(), NOW()),
 ('enable_price_tracking', '1', 'boolean', 'Enable price comparison and tracking', NOW(), NOW()),
 ('enable_seo_analysis', '1', 'boolean', 'Enable SEO analysis and title optimization', NOW(), NOW());
+>>>>>>> 9e8aaee60d86aca05b60ddc02aee8cd96e018395
 
 -- Check if data was inserted
 SELECT 'Settings table setup completed. Please configure your Serper.dev API key in Admin → Dropshipping → Settings' as status; 

@@ -610,4 +610,44 @@ class WooCommerceConfigController extends Controller
             ];
         }
     }
+
+    /**
+     * Test Google AI Studio API connection
+     */
+    public function testGoogleAIStudioApi(Request $request)
+    {
+        $apiKey = $request->input('api_key');
+        $endpoint = $request->input('endpoint');
+        try {
+            $payload = [
+                'contents' => [
+                    [
+                        'role' => 'user',
+                        'parts' => [
+                            ['text' => 'Test connection. Reply with {"status": "ok"}']
+                        ]
+                    ]
+                ]
+            ];
+            $response = \Http::timeout(20)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($endpoint . '?key=' . $apiKey, $payload);
+            if ($response->successful()) {
+                $data = $response->json();
+                // Try to parse JSON from the AI response
+                $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                if (strpos($text, 'ok') !== false) {
+                    return response()->json(['success' => true, 'message' => 'Google AI Studio API connection successful!']);
+                } else {
+                    return response()->json(['success' => false, 'message' => 'API responded, but did not return expected test result. Raw: ' . $text]);
+                }
+            } else {
+                return response()->json(['success' => false, 'message' => 'API request failed: ' . $response->status() . ' - ' . $response->body()]);
+            }
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Exception: ' . $e->getMessage()]);
+        }
+    }
 }

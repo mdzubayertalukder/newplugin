@@ -127,13 +127,14 @@ class BkashController extends Controller
     }
 
     /**
-     * Create bKash payment
+     * Create and auto-execute bKash payment
      */
     public function createPayment(Request $request)
     {
         try {
-            $response = Http::timeout(60) // Increase timeout to 60 seconds
-                ->retry(3, 2000) // Retry 3 times with 2 second delay
+            // Step 1: Create payment
+            $createResponse = Http::timeout(60)
+                ->retry(3, 2000)
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
@@ -149,19 +150,95 @@ class BkashController extends Controller
                     'merchantInvoiceNumber' => 'Invoice-' . time(),
                 ]);
 
-            if ($response->successful()) {
-                $data = $response->json();
+            if (!$createResponse->successful()) {
                 return response()->json([
-                    'success' => true,
-                    'data' => $data,
+                    'success' => false,
+                    'message' => 'Failed to create payment',
                 ]);
             }
 
+            $createData = $createResponse->json();
+            $paymentID = $createData['paymentID'] ?? null;
+
+            if (!$paymentID) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment ID not received from bKash',
+                ]);
+            }
+
+            // Step 2: Auto-execute payment immediately
+            $executeResponse = Http::timeout(60)
+                ->retry(3, 2000)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'authorization' => $request->token,
+                    'x-app-key' => $this->app_key,
+                ])->post($this->base_url . '/tokenized/checkout/execute', [
+                    'paymentID' => $paymentID,
+                ]);
+
+            if ($executeResponse->successful()) {
+                $executeData = $executeResponse->json();
+                
+                // Log the execution response
+                \Illuminate\Support\Facades\Log::info('bKash Auto-Execute Payment Response (SaaS)', [
+                    'paymentID' => $paymentID,
+                    'response' => $executeData,
+                ]);
+
+                // Check for bKash error codes first
+                if (isset($executeData['statusCode']) && $executeData['statusCode'] !== '0000') {
+                    // Handle specific error codes
+                    switch ($executeData['statusCode']) {
+                        case '2058':
+                            // Payment has already been completed - this is actually success
+                            session()->put('bkash_transaction_id', $executeData['trxID'] ?? null);
+                            session()->put('bkash_payment_id', $executeData['paymentID'] ?? null);
+                            session()->put('bkash_amount', $executeData['amount'] ?? null);
+
+                            return response()->json([
+                                'success' => true,
+                                'auto_executed' => true,
+                                'data' => $executeData,
+                                'redirect_url' => route('plugin.saas.bkash.success.payment')
+                            ]);
+                        default:
+                            // For other error codes, fall back to manual processing
+                            break;
+                    }
+                }
+
+                if (isset($executeData['transactionStatus']) && $executeData['transactionStatus'] === 'Completed') {
+                    // Payment successful - store transaction details
+                    session()->put('bkash_transaction_id', $executeData['trxID'] ?? null);
+                    session()->put('bkash_payment_id', $executeData['paymentID'] ?? null);
+                    session()->put('bkash_amount', $executeData['amount'] ?? null);
+
+                    return response()->json([
+                        'success' => true,
+                        'auto_executed' => true,
+                        'data' => $executeData,
+                        'redirect_url' => route('plugin.saas.bkash.success.payment')
+                    ]);
+                }
+            }
+
+            // If auto-execution fails, return the original create data for manual processing
             return response()->json([
-                'success' => false,
-                'message' => 'Failed to create payment',
+                'success' => true,
+                'auto_executed' => false,
+                'data' => $createData,
+                'message' => 'Payment created but auto-execution failed. Manual completion required.'
             ]);
+
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('bKash Auto-Payment Error (SaaS)', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
