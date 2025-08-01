@@ -23,6 +23,10 @@ use Plugin\Saas\Repositories\CurrencyRepository;
 use Plugin\Saas\Repositories\SubscriptionRepository;
 use Plugin\Saas\Repositories\PaymentMethodRepository;
 use Plugin\Saas\Http\Requests\PaymentMethodCredentialRequest;
+use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Response;
 
 class PaymentController extends Controller
 {
@@ -198,6 +202,10 @@ class PaymentController extends Controller
                 return (new \Plugin\Saas\Http\Controllers\Payment\BkashController)->index();
             }
 
+            if ($payment_method == 'multipurcpay') {
+                return (new \Plugin\Saas\Http\Controllers\Payment\MultipurcpayController)->index();
+            }
+
             return redirect('/404');
         } else {
             return redirect('/404');
@@ -212,7 +220,6 @@ class PaymentController extends Controller
         if (!session()->get('is_for_update')) {
             $this->delete_tenant();
         }
-        toastNotification('error', 'Payment Failed. Please try again', 'Error');
         $redirect_url = session()->get('redirect_url') != null ? session()->get('redirect_url') : '/';
         $this->clear_payment_session();
         return redirect()->to($redirect_url);
@@ -227,7 +234,6 @@ class PaymentController extends Controller
             $this->delete_tenant();
         }
 
-        toastNotification('error', 'Payment Canceled. Please try again', 'Error');
         $redirect_url = session()->get('redirect_url') != null ? session()->get('redirect_url') : '/';
         $this->clear_payment_session();
         return redirect()->to($redirect_url);
@@ -441,7 +447,7 @@ class PaymentController extends Controller
                 $errorMessage .= ': ' . $e->getMessage();
             }
 
-            toastNotification('error', $errorMessage, 'Error');
+            // toastNotification('error', $errorMessage, 'Error'); // Removed as per new error display
             return redirect()->route('plugin.saas.user.dashboard');
         }
     }

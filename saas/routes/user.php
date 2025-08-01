@@ -23,6 +23,7 @@ use Plugin\Saas\Http\Controllers\Payment\SSLCommerzController;
 use Plugin\Saas\Http\Controllers\Payment\MercadoPagoController;
 use Plugin\Saas\Http\Controllers\Payment\PowertranzpayController;
 use Plugin\Saas\Http\Controllers\Payment\BkashController;
+use Plugin\Saas\Http\Controllers\Payment\MultipurcpayController;
 
 Route::group(['prefix' => getSaasPrefix(), 'middleware' => ['handle.expired.account']], function () {
     Route::get('/registration', [UserController::class, 'register'])->name('plugin.saas.user.registration');
@@ -43,6 +44,10 @@ Route::group(['prefix' => getSaasPrefix(), 'middleware' => ['handle.expired.acco
 
     Route::post('/get-packages-according-to-plan', [PackageController::class, 'getPackageAccordingToPlanForFrontend'])
         ->name('plugin.saas.get.packages.according.to.plan.frontend');
+
+    // Location routes that need to be accessible during plan ordering
+    Route::post('get-states-of-country', [SubscriptionController::class, 'getStatesOfCountry'])->name('plugin.saas.get.states.of.country');
+    Route::post('get-cities-of-state', [SubscriptionController::class, 'getCitiesOfState'])->name('plugin.saas.get.cities.of.state');
 
     $applied_middleware = ['admin.subscriber.separation:4'];
     if (env('IS_USER_REGISTERED') == 1) {
@@ -70,9 +75,6 @@ Route::group(['prefix' => getSaasPrefix(), 'middleware' => ['handle.expired.acco
 
 
         //Subscription Routes
-        Route::post('get-states-of-country', [SubscriptionController::class, 'getStatesOfCountry'])->name('plugin.saas.get.states.of.country');
-        Route::post('get-cities-of-state', [SubscriptionController::class, 'getCitiesOfState'])->name('plugin.saas.get.cities.of.state');
-
         Route::get('change-subscription-plan/{store_id}', [SubscriptionController::class, 'changeSubscriptionPlan'])->name('plugin.saas.change.subscription.plan');
         Route::get('subscribe-now', [SubscriptionController::class, 'subscribeNow'])->name('plugin.saas.subscribe.now');
         Route::post('apply-coupon', [SubscriptionController::class, 'applyCoupon'])->name('plugin.saas.apply.coupon');
@@ -154,4 +156,12 @@ Route::group(['prefix' => getSaasPrefix(), 'middleware' => ['handle.expired.acco
     Route::get('/bkash/callback', [BkashController::class, 'callback'])->name('plugin.saas.bkash.callback');
     Route::get('/bkash/success', [BkashController::class, 'success'])->name('plugin.saas.bkash.success.payment');
     Route::get('/bkash/cancel', [BkashController::class, 'cancel'])->name('plugin.saas.bkash.cancel.payment');
+
+    //Multipurcpay
+    Route::get('/multipurcpay/pay', [MultipurcpayController::class, 'index'])->name('plugin.saas.multipurcpay.pay');
+    Route::post('/multipurcpay/create-charge', [MultipurcpayController::class, 'createCharge'])->name('plugin.saas.multipurcpay.create.charge');
+    Route::post('/multipurcpay/verify-payment', [MultipurcpayController::class, 'verifyPayment'])->name('plugin.saas.multipurcpay.verify.payment');
+    Route::any('/multipurcpay/webhook', [MultipurcpayController::class, 'webhook'])->name('plugin.saas.multipurcpay.webhook');
+    Route::get('/multipurcpay/success', [MultipurcpayController::class, 'success'])->name('plugin.saas.multipurcpay.success.payment');
+    Route::get('/multipurcpay/cancel', [MultipurcpayController::class, 'cancel'])->name('plugin.saas.multipurcpay.cancel.payment');
 });

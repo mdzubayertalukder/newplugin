@@ -19,7 +19,8 @@ return [
         'powertranzpay' => 12,
         'avariamoney' => 13,
         'paymob' => 15,
-        'mercado-pago' => 16
+        'mercado-pago' => 16,
+        'multipurcpay' => 18
     ],
     'payment_methods' => [
         'paypal' => 2,
@@ -35,6 +36,7 @@ return [
         'avariamoney' => 13,
         'paymob' => 15,
         'mercado-pago' => 16,
-        'bkash' => 17
+        'bkash' => 17,
+        'multipurcpay' => 18
     ]
 ];

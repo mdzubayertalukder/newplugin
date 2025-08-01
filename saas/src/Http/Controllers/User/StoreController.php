@@ -123,6 +123,10 @@ class StoreController extends Controller
     public function confirmPlanOrder(PackageConfirmRequest $request): RedirectResponse
     {
         try {
+            // Log all request data for debugging
+            $request_data = json_encode($request->all(), JSON_PRETTY_PRINT);
+            file_put_contents(storage_path('logs/store_controller_debug.log'), "--- New Request ---\n" . $request_data . "\n", FILE_APPEND);
+
             DB::beginTransaction();
             $package = Package::find($request['package']);
 
@@ -276,7 +280,25 @@ class StoreController extends Controller
             }
         } catch (Exception $ex) {
             DB::rollBack();
-            toastNotification('error', 'Package Confirmation fail', 'Error');
+            
+            // Enhanced error logging for debugging
+            $error_details = [
+                'error_message' => $ex->getMessage(),
+                'error_file' => $ex->getFile(),
+                'error_line' => $ex->getLine(),
+                'error_trace' => $ex->getTraceAsString(),
+                'request_data' => $request->all(),
+                'user_id' => auth()->user() ? auth()->user()->id : 'guest',
+                'timestamp' => now()->toISOString()
+            ];
+            
+            file_put_contents(storage_path('logs/package_confirmation_error.log'),
+                "--- Package Confirmation Error ---\n" .
+                json_encode($error_details, JSON_PRETTY_PRINT) . "\n\n",
+                FILE_APPEND
+            );
+            
+            toastNotification('error', 'Package Confirmation fail: ' . $ex->getMessage(), 'Error');
             return redirect()->back();
         } catch (Stancl\Tenancy\Exceptions\DomainOccupiedByOtherTenantException $dex) {
             DB::rollBack();
