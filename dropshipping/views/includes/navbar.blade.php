@@ -3,6 +3,12 @@
 // Enhanced check for dropshipping plugin that works for both super admin and tenant
 $dropshippingActive = false;
 
+// Check if we're on the user dashboard and hide dropshipping if so
+$isUserDashboard = request()->is('user/dashboard*') || request()->is('user/*') && !request()->is('admin/*');
+
+if ($isUserDashboard) {
+$dropshippingActive = false; // Hide dropshipping on user dashboard
+} else {
 if (!isTenant()) {
 // Super Admin: Check dropshipping plugin activation directly
 try {
@@ -35,6 +41,7 @@ $dropshippingActive = true; // Allow access if plugin exists
 } catch (\Exception $e) {
 // Last resort - check if plugin directory exists
 $dropshippingActive = file_exists(base_path('plugins/dropshipping/plugin.json'));
+}
 }
 }
 @endphp

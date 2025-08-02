@@ -3,29 +3,36 @@
 // Enhanced dropshipping check for dashboard widget
 $showDropshippingWidget = false;
 
-if (function_exists('isTenant') && isTenant()) {
-try {
-// Try standard plugin check first
-$showDropshippingWidget = isActivePluging('dropshipping', true);
+// Check if we're on the user dashboard and hide dropshipping if so
+$isUserDashboard = request()->is('user/dashboard*') || request()->is('user/*') && !request()->is('admin/*');
 
-// Fallback checks if standard check fails
-if (!$showDropshippingWidget) {
-// Direct database check
-$dropshippingPlugin = DB::table('tl_plugins')
-->where('location', 'dropshipping')
-->where('is_activated', config('settings.general_status.active'))
-->first();
-$showDropshippingWidget = ($dropshippingPlugin !== null);
-}
+if ($isUserDashboard) {
+    $showDropshippingWidget = false; // Hide dropshipping widget on user dashboard
+} else {
+    if (function_exists('isTenant') && isTenant()) {
+    try {
+    // Try standard plugin check first
+    $showDropshippingWidget = isActivePluging('dropshipping', true);
 
-// Final fallback - check if plugin exists
-if (!$showDropshippingWidget && file_exists(base_path('plugins/dropshipping/plugin.json'))) {
-$showDropshippingWidget = true;
-}
-} catch (\Exception $e) {
-// Emergency fallback
-$showDropshippingWidget = file_exists(base_path('plugins/dropshipping/plugin.json'));
-}
+    // Fallback checks if standard check fails
+    if (!$showDropshippingWidget) {
+    // Direct database check
+    $dropshippingPlugin = DB::table('tl_plugins')
+    ->where('location', 'dropshipping')
+    ->where('is_activated', config('settings.general_status.active'))
+    ->first();
+    $showDropshippingWidget = ($dropshippingPlugin !== null);
+    }
+
+    // Final fallback - check if plugin exists
+    if (!$showDropshippingWidget && file_exists(base_path('plugins/dropshipping/plugin.json'))) {
+    $showDropshippingWidget = true;
+    }
+    } catch (\Exception $e) {
+    // Emergency fallback
+    $showDropshippingWidget = file_exists(base_path('plugins/dropshipping/plugin.json'));
+    }
+    }
 }
 @endphp
 
